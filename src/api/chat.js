@@ -4,6 +4,15 @@ export async function getChatHistory() {
   return api.get("/chat");
 }
 
+export async function getConversation(conversationId, messageIds = null) {
+  let url = `/chat/conversations/${conversationId}`;
+  if (messageIds && messageIds.length > 0) {
+    const qs = messageIds.map((id) => `messageIds=${encodeURIComponent(id)}`).join("&");
+    url += `?${qs}`;
+  }
+  return api.get(url);
+}
+
 export async function sendMessage(content, selectedMemoryId = null) {
   return api.post("/chat", { content, selectedMemoryId });
 }

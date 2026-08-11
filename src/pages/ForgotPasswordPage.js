@@ -21,9 +21,14 @@ export default function ForgotPasswordPage() {
       return;
     }
 
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await forgotPassword(email);
+      const response = await forgotPassword(email.trim());
       setSuccess(response.message || "Check your email for a password reset link.");
       setEmail("");
     } catch (err) {

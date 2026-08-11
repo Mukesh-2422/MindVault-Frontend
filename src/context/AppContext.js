@@ -12,7 +12,8 @@ const initialState = {
   memories: [],
   people: [],
   chatHistory: [],
-  activeChatId: null,
+  currentChat: [], // Active chat session on Home page
+  activeConversationId: null, // ID of conversation being viewed in chat history
   memorySearchResults: [],
   theme: "light",
   language: "en",
@@ -99,6 +100,21 @@ function appReducer(state, action) {
       return { ...state, chatHistory: [...state.chatHistory, action.payload] };
     case "SET_CHAT_HISTORY":
       return { ...state, chatHistory: action.payload };
+    case "SET_CURRENT_CHAT":
+      return { ...state, currentChat: action.payload };
+    case "ADD_CURRENT_CHAT_MESSAGE":
+      return { ...state, currentChat: [...state.currentChat, action.payload] };
+    case "REPLACE_CURRENT_CHAT_MESSAGE":
+      return {
+        ...state,
+        currentChat: state.currentChat.map((msg) =>
+          msg.id === action.payload.localId ? action.payload.message : msg
+        ),
+      };
+    case "CLEAR_CURRENT_CHAT":
+      return { ...state, currentChat: [], activeConversationId: null };
+    case "SET_ACTIVE_CONVERSATION_ID":
+      return { ...state, activeConversationId: action.payload };
     case "SET_PEOPLE":
       return { ...state, people: action.payload };
     case "ADD_PERSON":
@@ -234,8 +250,10 @@ export function AppProvider({ children }) {
   const processChat = useCallback(async (userMessage, selectedMemoryId = null) => {
     try {
       const result = await chatApi.sendMessage(userMessage, selectedMemoryId);
+      // Add to persistent chat history
       if (result.user) dispatch({ type: "ADD_CHAT", payload: result.user });
       if (result.assistant) dispatch({ type: "ADD_CHAT", payload: result.assistant });
+      // Refresh memories to pick up any new relations
       const memories = await memoriesApi.getMemories();
       dispatch({ type: "SET_MEMORIES", payload: memories });
       return result;
@@ -248,6 +266,7 @@ export function AppProvider({ children }) {
   const selectMemoryContext = useCallback(async (memoryId) => {
     try {
       const result = await chatApi.selectMemoryContext(memoryId);
+      // Add to persistent chat history
       if (result.assistant) dispatch({ type: "ADD_CHAT", payload: result.assistant });
       return result;
     } catch (err) {
@@ -267,13 +286,25 @@ export function AppProvider({ children }) {
   }, []);
 
   const handleLogout = useCallback(async () => {
-    try {
-      await chatApi.clearChatHistory();
-    } catch (err) {
-      console.error("Error clearing chat history:", err);
-    }
+    // Do NOT clear chat history from backend - just clear local state
     authApi.logout();
     dispatch({ type: "LOGOUT" });
+  }, [dispatch]);
+
+  const loadConversation = useCallback(async (conversationId, messageIds = null) => {
+    try {
+      dispatch({ type: "SET_LOADING", payload: true });
+      const conversation = await chatApi.getConversation(conversationId, messageIds);
+      dispatch({ type: "SET_CURRENT_CHAT", payload: conversation.messages || [] });
+      dispatch({ type: "SET_ACTIVE_CONVERSATION_ID", payload: conversationId });
+    } catch (err) {
+      console.error("Error loading conversation:", err);
+      dispatch({ type: "SET_ERROR", payload: err.message || "Failed to load conversation" });
+      dispatch({ type: "SET_CURRENT_CHAT", payload: [] });
+      dispatch({ type: "SET_ACTIVE_CONVERSATION_ID", payload: null });
+    } finally {
+      dispatch({ type: "SET_LOADING", payload: false });
+    }
   }, [dispatch]);
 
   const value = {
@@ -283,6 +314,7 @@ export function AppProvider({ children }) {
     selectMemoryContext,
     loadData,
     loadChatHistory,
+    loadConversation,
     deleteConversation,
     handleLogin,
     handleRegister,

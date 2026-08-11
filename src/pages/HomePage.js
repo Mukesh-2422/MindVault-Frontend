@@ -22,7 +22,8 @@ export default function HomePage() {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const recognitionRef = useRef(null);
-  const [localChat, setLocalChat] = useState([]);
+  // Use state.currentChat from context instead of local state
+  // const [localChat, setLocalChat] = useState([]);
   const [chatError, setChatError] = useState(null);
   const [memorySearchResults, setMemorySearchResults] = useState([]);
   const [isSearchingMemories, setIsSearchingMemories] = useState(false);
@@ -34,9 +35,13 @@ export default function HomePage() {
   useEffect(() => {
     const wasAuthenticated = prevAuthRef.current;
     const isAuthenticated = state.isAuthenticated;
-    setLocalChat([]);
+    // Clear current chat when auth state changes (login/logout)
+    if (wasAuthenticated !== isAuthenticated) {
+      dispatch({ type: "CLEAR_CURRENT_CHAT" });
+      setMemorySearchResults([]);
+    }
     prevAuthRef.current = isAuthenticated;
-  }, [state.isAuthenticated]);
+  }, [state.isAuthenticated, dispatch]);
 
   const onThisDay = getOnThisDay(state.memories);
 
@@ -87,23 +92,10 @@ export default function HomePage() {
     setPlayingAudioId(null);
   };
 
-  useEffect(() => {
-    if (state.isAuthenticated && state.chatHistory && state.chatHistory.length > 0 && localChat.length === 0) {
-      setLocalChat(state.chatHistory);
-    }
-  }, [state.isAuthenticated, state.chatHistory, localChat.length]);
+  // NOTE: Do NOT load chatHistory into Home chat.
+  // Home page shows ONLY the current active chat session.
+  // Chat History is accessed separately via /chat-history route.
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [localChat, isTyping]);
-
-  useEffect(() => {
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
-      }
-    };
-  }, []);
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -171,17 +163,21 @@ export default function HomePage() {
     setMemorySearchResults([]);
 
     const userMsg = {
-      id: Date.now().toString(),
+      id: `local_${Date.now()}`,
       role: "user",
       content: text.trim(),
       timestamp: new Date().toISOString(),
     };
-    setLocalChat(prev => [...prev, userMsg]);
+    dispatch({ type: "ADD_CURRENT_CHAT_MESSAGE", payload: userMsg });
     setIsTyping(true);
     try {
       const result = await processChat(text, selectedMemory);
+      if (result?.user) {
+        // Replace the temporary local message with the backend message
+        dispatch({ type: "REPLACE_CURRENT_CHAT_MESSAGE", payload: { localId: userMsg.id, message: result.user } });
+      }
       if (result?.assistant) {
-        setLocalChat(prev => [...prev, result.assistant]);
+        dispatch({ type: "ADD_CURRENT_CHAT_MESSAGE", payload: result.assistant });
       } else if (result?.error) {
         setChatError(result.error);
       }
@@ -199,12 +195,12 @@ export default function HomePage() {
     setMemorySearchResults([]);
 
     const userMsg = {
-      id: Date.now().toString(),
+      id: `local_${Date.now()}`,
       role: "user",
       content: text.trim(),
       timestamp: new Date().toISOString(),
     };
-    setLocalChat(prev => [...prev, userMsg]);
+    dispatch({ type: "ADD_CURRENT_CHAT_MESSAGE", payload: userMsg });
     searchMemories(text.trim());
   };
 
@@ -216,17 +212,21 @@ export default function HomePage() {
     setMemorySearchResults([]);
 
     const userMsg = {
-      id: Date.now().toString(),
+      id: `local_${Date.now()}`,
       role: "user",
       content: msg,
       timestamp: new Date().toISOString(),
     };
-    setLocalChat(prev => [...prev, userMsg]);
+    dispatch({ type: "ADD_CURRENT_CHAT_MESSAGE", payload: userMsg });
     setIsTyping(true);
     try {
       const result = await processChat(msg, selectedMemory);
+      if (result?.user) {
+        // Replace the temporary local message with the backend message
+        dispatch({ type: "REPLACE_CURRENT_CHAT_MESSAGE", payload: { localId: userMsg.id, message: result.user } });
+      }
       if (result?.assistant) {
-        setLocalChat(prev => [...prev, result.assistant]);
+        dispatch({ type: "ADD_CURRENT_CHAT_MESSAGE", payload: result.assistant });
       } else if (result?.error) {
         setChatError(result.error);
       }
@@ -243,7 +243,7 @@ export default function HomePage() {
     try {
       const result = await selectMemoryContext(memoryId);
       if (result?.assistant) {
-        setLocalChat(prev => [...prev, result.assistant]);
+        dispatch({ type: "ADD_CURRENT_CHAT_MESSAGE", payload: result.assistant });
         setSelectedMemory(memoryId);
       } else if (result?.error) {
         setChatError(result.error);
@@ -366,10 +366,10 @@ export default function HomePage() {
         </div>
 
         {/* Chat Messages */}
-        {localChat.length > 0 && (
+        {state.currentChat.length > 0 && (
           <div className="chat-container">
             <div className="chat-messages">
-              {localChat.map((msg) => (
+              {state.currentChat.map((msg) => (
                 <div key={msg.id} className={`chat-message ${msg.role}`}>
                   <div className="chat-avatar">
                     {msg.role === "user" ? (
@@ -485,3 +485,4 @@ export default function HomePage() {
     </div>
   );
 }
+

@@ -20,5 +20,6 @@ export { default as SettingsSecurityPage } from "./SettingsSecurityPage";
 export { default as SettingsLanguagePage } from "./SettingsLanguagePage";
 export { default as SettingsAppearancePage } from "./SettingsAppearancePage";
 export { default as ChatHistoryPage } from "./ChatHistoryPage";
+export { default as ConversationViewPage } from "./ConversationViewPage";
 export { default as VoiceMemoriesPage } from "./VoiceMemoriesPage";
 export { default as VaultResetPage } from "./VaultResetPage";

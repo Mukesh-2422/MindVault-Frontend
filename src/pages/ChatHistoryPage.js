@@ -36,21 +36,35 @@ export default function ChatHistoryPage() {
 
       if (!currentGroup || msgTime - currentGroup.lastTimestamp > GROUP_GAP_MS) {
         // Start new conversation
+        const firstUserMsg = msg.role === "user" ? msg.content : null;
         currentGroup = {
           id: msg.id,
           messages: [msg],
           firstTimestamp: msgTime,
           lastTimestamp: msgTime,
+          title: firstUserMsg || msg.content,
           preview: msg.content,
+          messageCount: 1,
         };
         groups.push(currentGroup);
       } else {
         // Add to existing conversation
         currentGroup.messages.push(msg);
         currentGroup.lastTimestamp = msgTime;
-        // Update preview to last user message
-        if (msg.role === "user") {
-          currentGroup.preview = msg.content;
+        currentGroup.messageCount = currentGroup.messages.length;
+
+        // Set title from first user message
+        if (!currentGroup.title && msg.role === "user") {
+          currentGroup.title = msg.content;
+        }
+
+        // Build preview: first user message + first assistant response
+        if (!currentGroup.preview || currentGroup.preview === currentGroup.title) {
+          const firstUser = currentGroup.messages.find((m) => m.role === "user");
+          const firstAssistant = currentGroup.messages.find((m) => m.role === "assistant");
+          if (firstUser && firstAssistant) {
+            currentGroup.preview = `${firstUser.content}\n${firstAssistant.content}`;
+          }
         }
       }
     });
@@ -255,7 +269,6 @@ export default function ChatHistoryPage() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {searchedConversations.map((conv) => {
-                const firstUserMsg = conv.messages.find((m) => m.role === "user");
                 const assistantResponses = conv.messages.filter((m) => m.role === "assistant");
                 const hasRelatedMemories = assistantResponses.some(
                   (m) => m.relatedMemories && m.relatedMemories.length > 0
@@ -270,7 +283,7 @@ export default function ChatHistoryPage() {
                       cursor: "pointer",
                       transition: "all var(--transition-fast)",
                     }}
-                    onClick={() => navigate("/home")}
+                    onClick={() => navigate(`/chat-history/${conv.id}`)}
                   >
                     {/* Conversation Header */}
                     <div
@@ -292,7 +305,7 @@ export default function ChatHistoryPage() {
                             lineHeight: 1.4,
                           }}
                         >
-                          {firstUserMsg ? firstUserMsg.content : "Conversation"}
+                          {conv.title || "Conversation"}
                         </div>
                         <div
                           style={{
@@ -300,8 +313,8 @@ export default function ChatHistoryPage() {
                             color: "var(--text-tertiary)",
                           }}
                         >
-                          {formatDate(conv.firstTimestamp)} · {conv.messages.length} message
-                          {conv.messages.length !== 1 ? "s" : ""}
+                          {formatDate(conv.firstTimestamp)} · {conv.messageCount || conv.messages.length} message
+                          {(conv.messageCount || conv.messages.length) !== 1 ? "s" : ""}
                         </div>
                       </div>
                       <button
@@ -335,10 +348,11 @@ export default function ChatHistoryPage() {
                         color: "var(--text-secondary)",
                         lineHeight: 1.5,
                         marginBottom: hasRelatedMemories ? 10 : 0,
+                        whiteSpace: "pre-wrap",
                       }}
                     >
-                      {conv.preview.length > 120
-                        ? conv.preview.substring(0, 120) + "..."
+                      {conv.preview.length > 150
+                        ? conv.preview.substring(0, 150) + "..."
                         : conv.preview}
                     </div>
 

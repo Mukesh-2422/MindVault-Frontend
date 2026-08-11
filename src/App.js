@@ -26,6 +26,7 @@ import {
   SettingsLanguagePage,
   SettingsAppearancePage,
   ChatHistoryPage,
+  ConversationViewPage,
   VaultResetPage,
 } from "./pages";
 
@@ -214,13 +215,19 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/vault-reset/:token"
+        path="/chat-history/:conversationId"
         element={
-          <VaultResetPage />
+          <ProtectedRoute>
+            <ConversationViewPage />
+          </ProtectedRoute>
         }
       />
-
-      {/* Fallback */}
+      <Route
+        path="/vault-reset/:token"
+        element={
+          state.isAuthenticated ? <Navigate to="/vault" replace /> : <VaultResetPage />
+        }
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -235,3 +242,6 @@ export default function App() {
     </AppProvider>
   );
 }
+
+
+
