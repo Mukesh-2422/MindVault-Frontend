@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import TopNav from "../components/layout/TopNav";
 import { useApp } from "../context/AppContext";
+import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import { getInitials } from "../utils/helpers";
 import * as authApi from "../api/auth";
 import { User, ArrowLeft, Save, Camera } from "lucide-react";
@@ -11,6 +12,7 @@ import "../styles/pages.css";
 export default function SettingsProfilePage() {
   const navigate = useNavigate();
   const { state, dispatch } = useApp();
+  const goBack = useAppBackNavigation("/settings");
 
   const [name, setName] = useState(state.user?.name || "");
   const [email] = useState(state.user?.email || "");
@@ -45,7 +47,7 @@ export default function SettingsProfilePage() {
     <div className="app">
       <TopNav />
       <div className="main-content settings-sub-page">
-        <button className="back-btn" onClick={() => navigate("/settings")}>
+        <button className="back-btn" onClick={goBack} aria-label="Go back">
           <ArrowLeft size={16} strokeWidth={1.5} />
         </button>
 

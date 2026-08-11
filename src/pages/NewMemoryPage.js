@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { formatFullDate, formatTime } from "../utils/helpers";
+import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import { createMemory, updateMemory } from "../api/memories";
 import { uploadFile } from "../api/client";
 import { uploadVoiceMemory } from "../api/voice";
@@ -17,6 +18,7 @@ export default function NewMemoryPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { state, dispatch } = useApp();
+  const goBack = useAppBackNavigation("/home");
 
   const memType = searchParams.get("type") || "text";
   const editId = searchParams.get("edit");
@@ -287,7 +289,7 @@ export default function NewMemoryPage() {
     <div className="new-memory-page">
       <nav className="memory-editor-nav">
         <div className="editor-nav-left">
-          <button className="editor-nav-btn" onClick={() => navigate(-1)}>
+          <button className="editor-nav-btn" onClick={goBack} aria-label="Go back">
             <ArrowLeft size={16} strokeWidth={1.5} />
           </button>
         </div>
@@ -322,7 +324,7 @@ export default function NewMemoryPage() {
                   <Download size={16} strokeWidth={1.5} />
                   Export
                 </button>
-                <button className="dropdown-item danger" onClick={() => navigate(-1)}>
+                <button className="dropdown-item danger" onClick={goBack}>
                   <Trash2 size={16} strokeWidth={1.5} />
                   Delete Draft
                 </button>

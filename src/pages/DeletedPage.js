@@ -1,16 +1,16 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
 import TopNav from "../components/layout/TopNav";
 import { useApp } from "../context/AppContext";
 import { restoreMemory, permanentDeleteMemory } from "../api/memories";
 import { formatDate, getDaysUntilDelete, getMemoryTypeIcon, truncate } from "../utils/helpers";
+import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import { Trash2, AlertTriangle, RotateCcw, XCircle, Trash, ArrowLeft } from "lucide-react";
 import "../styles/global.css";
 import "../styles/pages.css";
 
 export default function DeletedPage() {
-  const navigate = useNavigate();
   const { state, dispatch } = useApp();
+  const goBack = useAppBackNavigation("/home");
 
   const deletedMemories = state.memories
     .filter((m) => m.deleted)
@@ -45,7 +45,7 @@ export default function DeletedPage() {
     <div className="app">
       <TopNav />
       <div className="main-content deleted-page">
-        <button className="back-btn" onClick={() => navigate("/home")}>
+        <button className="back-btn" onClick={goBack} aria-label="Go back">
           <ArrowLeft size={16} strokeWidth={1.5} />
         </button>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 12, marginBottom: 4 }}>

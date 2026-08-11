@@ -4,6 +4,7 @@ import TopNav from "../components/layout/TopNav";
 import FAB from "../components/layout/FAB";
 import MemoryCard from "../components/memory/MemoryCard";
 import { useApp } from "../context/AppContext";
+import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import {
   createVault,
   unlockVault,
@@ -40,6 +41,7 @@ import "../styles/pages.css";
 export default function VaultPage() {
   const navigate = useNavigate();
   const { state, dispatch } = useApp();
+  const goBack = useAppBackNavigation("/home");
 
   // Primary form states
   const [passwordInput, setPasswordInput] = useState("");
@@ -222,7 +224,7 @@ export default function VaultPage() {
         <TopNav />
         <div className="main-content vault-page">
           <div className="page-header-row">
-            <button className="back-btn" onClick={() => navigate("/home")}>
+            <button className="back-btn" onClick={goBack} aria-label="Go back">
               <ArrowLeft size={16} strokeWidth={1.5} />
             </button>
           </div>
@@ -285,7 +287,7 @@ export default function VaultPage() {
         <TopNav />
         <div className="main-content vault-page">
           <div className="page-header-row">
-            <button className="back-btn" onClick={() => navigate("/home")}>
+            <button className="back-btn" onClick={goBack} aria-label="Go back">
               <ArrowLeft size={16} strokeWidth={1.5} />
             </button>
           </div>
@@ -424,7 +426,7 @@ export default function VaultPage() {
       <TopNav />
       <div className="main-content vault-page">
         <div className="page-header-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <button className="back-btn" onClick={() => navigate("/home")}>
+          <button className="back-btn" onClick={goBack} aria-label="Go back">
             <ArrowLeft size={16} strokeWidth={1.5} />
           </button>
           <div style={{ display: "flex", gap: "8px" }}>

@@ -4,6 +4,7 @@ import TopNav from "../components/layout/TopNav";
 import FAB from "../components/layout/FAB";
 import MemoryCard from "../components/memory/MemoryCard";
 import { useApp } from "../context/AppContext";
+import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import { Layout, FileText, Mic, Image, Video, CheckSquare, ArrowLeft, AlertCircle, Plus } from "lucide-react";
 import "../styles/global.css";
 import "../styles/pages.css";
@@ -15,6 +16,7 @@ const TYPE_ICONS = { text: FileText, voice: Mic, image: Image, video: Video, che
 export default function CollectionsPage() {
   const navigate = useNavigate();
   const { state } = useApp();
+  const goBack = useAppBackNavigation("/home");
   const [selectedType, setSelectedType] = useState(null);
 
   const activeMemories = state.memories.filter((m) => !m.deleted);
@@ -33,7 +35,7 @@ export default function CollectionsPage() {
         {!selectedType ? (
           <>
             <div className="page-header-row">
-              <button className="back-btn" onClick={() => navigate("/home")}>
+              <button className="back-btn" onClick={goBack} aria-label="Go back">
                 <ArrowLeft size={16} strokeWidth={1.5} />
               </button>
             </div>
@@ -86,7 +88,7 @@ export default function CollectionsPage() {
         ) : (
           <>
             <div className="page-header-row">
-              <button className="back-btn" onClick={() => setSelectedType(null)}>
+              <button className="back-btn" onClick={() => setSelectedType(null)} aria-label="Go back">
                 <ArrowLeft size={16} strokeWidth={1.5} />
               </button>
               <div className="collection-detail-title">

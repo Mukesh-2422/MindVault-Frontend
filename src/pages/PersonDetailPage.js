@@ -1,17 +1,18 @@
 import React from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import TopNav from "../components/layout/TopNav";
 import MemoryCard from "../components/memory/MemoryCard";
 import { useApp } from "../context/AppContext";
 import { getInitials, formatDate } from "../utils/helpers";
+import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import { ArrowLeft, Phone, Mail, Cake, Clock, FileText } from "lucide-react";
 import "../styles/global.css";
 import "../styles/pages.css";
 
 export default function PersonDetailPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const { state } = useApp();
+  const goBack = useAppBackNavigation("/people");
 
   const person = state.people.find((p) => p.id === id);
 
@@ -28,7 +29,7 @@ export default function PersonDetailPage() {
             <button
               className="btn btn-secondary btn-sm"
               style={{ marginTop: 16 }}
-              onClick={() => navigate(-1)}
+              onClick={goBack}
             >
               Go Back
             </button>
@@ -58,7 +59,7 @@ export default function PersonDetailPage() {
       <TopNav />
       <div className="main-content person-detail-page">
         <div style={{ paddingTop: 16 }}>
-          <button className="back-btn" onClick={() => navigate(-1)}>
+          <button className="back-btn" onClick={goBack} aria-label="Go back">
             <ArrowLeft size={16} strokeWidth={1.5} />
           </button>
         </div>

@@ -1,7 +1,7 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
 import TopNav from "../components/layout/TopNav";
 import { useApp } from "../context/AppContext";
+import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import { ArrowLeft, Sun, Moon, Monitor, Check } from "lucide-react";
 import "../styles/global.css";
 import "../styles/pages.css";
@@ -13,7 +13,7 @@ const THEMES = [
 ];
 
 export default function SettingsAppearancePage() {
-  const navigate = useNavigate();
+  const goBack = useAppBackNavigation("/settings");
   const { state, dispatch } = useApp();
 
   const handleSelect = (value) => {
@@ -24,7 +24,7 @@ export default function SettingsAppearancePage() {
     <div className="app">
       <TopNav />
       <div className="main-content settings-sub-page">
-        <button className="back-btn" onClick={() => navigate("/settings")}>
+        <button className="back-btn" onClick={goBack} aria-label="Go back">
           <ArrowLeft size={16} strokeWidth={1.5} />
         </button>
 

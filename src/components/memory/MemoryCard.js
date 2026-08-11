@@ -1,13 +1,17 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Pin } from "lucide-react";
 import { formatDate, getMemoryTypeIcon, truncate } from "../../utils/helpers";
 import { getMediaUrl } from "../../api/voice";
 
 export default function MemoryCard({ memory }) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   if (!memory) return null;
+
+  const openMemory = () =>
+    navigate(`/memory/${memory.id}`, { state: { from: location.pathname } });
 
   const typeIcon = getMemoryTypeIcon(memory.type, 20);
 
@@ -31,10 +35,10 @@ export default function MemoryCard({ memory }) {
   return (
     <div
       className="memory-card"
-      onClick={() => navigate(`/memory/${memory.id}`)}
+      onClick={openMemory}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && navigate(`/memory/${memory.id}`)}
+      onKeyDown={(e) => e.key === "Enter" && openMemory()}
     >
       <div className="memory-card-header">
         <span className="memory-card-title">{memory.title}</span>

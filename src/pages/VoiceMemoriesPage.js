@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import TopNav from "../components/layout/TopNav";
 import { useApp } from "../context/AppContext";
+import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import { getVoiceMemories, deleteVoiceMemory } from "../api/voice";
 import VoicePlayer from "../components/voice/VoicePlayer";
 import VoiceRecorder from "../components/voice/VoiceRecorder";
@@ -10,8 +10,8 @@ import "../styles/global.css";
 import "../styles/pages.css";
 
 export default function VoiceMemoriesPage() {
-  const navigate = useNavigate();
   const { state, dispatch } = useApp();
+  const goBack = useAppBackNavigation("/home");
   const [voiceMemories, setVoiceMemories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showRecorder, setShowRecorder] = useState(false);
@@ -58,7 +58,7 @@ export default function VoiceMemoriesPage() {
       <TopNav />
       <div className="main-content">
         <div className="page-header-row">
-          <button className="back-btn" onClick={() => navigate(-1)}>
+          <button className="back-btn" onClick={goBack} aria-label="Go back">
             <ArrowLeft size={16} strokeWidth={1.5} />
           </button>
         </div>

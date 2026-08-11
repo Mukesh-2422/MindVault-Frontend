@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import TopNav from "../components/layout/TopNav";
 import { useApp } from "../context/AppContext";
 import { getInitials } from "../utils/helpers";
+import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import {
   User, Edit3, ChevronRight, FileText, Mic, Image, Video, CheckSquare,
   Settings, ArrowLeft,
@@ -13,6 +14,7 @@ import "../styles/pages.css";
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { state } = useApp();
+  const goBack = useAppBackNavigation("/home");
 
   const memories = state.memories.filter((m) => !m.deleted);
   const stats = {
@@ -49,7 +51,7 @@ export default function ProfilePage() {
     <div className="app">
       <TopNav />
       <div className="main-content profile-page">
-        <button className="back-btn" onClick={() => navigate(-1)}>
+        <button className="back-btn" onClick={goBack} aria-label="Go back">
           <ArrowLeft size={16} strokeWidth={1.5} />
         </button>
         <div className="profile-header">

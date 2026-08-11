@@ -4,6 +4,7 @@ import TopNav from "../components/layout/TopNav";
 import FAB from "../components/layout/FAB";
 import { useApp } from "../context/AppContext";
 import { getInitials, formatDate } from "../utils/helpers";
+import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import { Users, Search, ChevronRight, ArrowLeft, Plus } from "lucide-react";
 import "../styles/global.css";
 import "../styles/pages.css";
@@ -11,6 +12,7 @@ import "../styles/pages.css";
 export default function PeoplePage() {
   const navigate = useNavigate();
   const { state } = useApp();
+  const goBack = useAppBackNavigation("/home");
   const [search, setSearch] = useState("");
 
   const filtered = state.people.filter((p) =>
@@ -23,7 +25,7 @@ export default function PeoplePage() {
       <TopNav />
       <div className="main-content people-page">
         <div className="page-header-row">
-          <button className="back-btn" onClick={() => navigate("/home")}>
+          <button className="back-btn" onClick={goBack} aria-label="Go back">
             <ArrowLeft size={16} strokeWidth={1.5} />
           </button>
           <div className="people-search">

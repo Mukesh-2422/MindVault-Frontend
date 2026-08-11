@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import TopNav from "../components/layout/TopNav";
 import { useApp } from "../context/AppContext";
+import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import * as authApi from "../api/auth";
 import { ArrowLeft, Key, Save } from "lucide-react";
 import "../styles/global.css";
@@ -9,6 +10,7 @@ import "../styles/pages.css";
 
 export default function SettingsSecurityPage() {
   const navigate = useNavigate();
+  const goBack = useAppBackNavigation("/settings");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -48,7 +50,7 @@ export default function SettingsSecurityPage() {
     <div className="app">
       <TopNav />
       <div className="main-content settings-sub-page">
-        <button className="back-btn" onClick={() => navigate("/settings")}>
+        <button className="back-btn" onClick={goBack} aria-label="Go back">
           <ArrowLeft size={16} strokeWidth={1.5} />
         </button>
 

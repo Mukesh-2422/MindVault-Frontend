@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import TopNav from "../components/layout/TopNav";
 import FAB from "../components/layout/FAB";
 import MemoryCard from "../components/memory/MemoryCard";
 import { useApp } from "../context/AppContext";
+import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import { Search, FileText, Mic, Image, Video, CheckSquare, Pin, X, SearchX, ArrowLeft } from "lucide-react";
 import "../styles/global.css";
 import "../styles/pages.css";
@@ -27,7 +27,7 @@ const EXAMPLE_QUERIES = [
 ];
 
 export default function SearchPage() {
-  const navigate = useNavigate();
+  const goBack = useAppBackNavigation("/home");
   const { state } = useApp();
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
@@ -63,7 +63,7 @@ export default function SearchPage() {
       <TopNav />
       <div className="main-content search-page">
         <div className="page-header-row">
-          <button className="back-btn" onClick={() => navigate("/home")}>
+          <button className="back-btn" onClick={goBack} aria-label="Go back">
             <ArrowLeft size={16} strokeWidth={1.5} />
           </button>
           <h1 className="search-page-title">Ask MindVault</h1>

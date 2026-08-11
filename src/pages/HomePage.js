@@ -268,7 +268,7 @@ export default function HomePage() {
       <div className="main-content home-page">
         {/* Memory Recall - On This Day */}
         {onThisDay && (
-          <div className="memory-recall-card" onClick={() => navigate(`/memory/${onThisDay.id}`)}>
+          <div className="memory-recall-card" onClick={() => navigate(`/memory/${onThisDay.id}`, { state: { from: "/home" } })}>
             <div className="recall-header">
               <Sparkles size={16} strokeWidth={2} />
               <span className="recall-label">On This Day</span>
@@ -386,7 +386,7 @@ export default function HomePage() {
                       <div className="chat-memory-reference-list">
                         <button
                           className="chat-memory-reference"
-                          onClick={() => navigate(`/memory/${msg.selectedMemory.id}`)}
+                          onClick={() => navigate(`/memory/${msg.selectedMemory.id}`, { state: { from: "/home" } })}
                           aria-label={`Open memory: ${msg.selectedMemory.title}`}
                           title={`Open memory: ${msg.selectedMemory.title}`}
                         >

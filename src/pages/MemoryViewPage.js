@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import TopNav from "../components/layout/TopNav";
 import { useApp } from "../context/AppContext";
 import { togglePinMemory, deleteMemory, updateMemory, getMemory, moveMemoryToVault } from "../api/memories";
+import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import {
   formatFullDate, formatTime, getMemoryTypeIcon, truncate,
 } from "../utils/helpers";
@@ -19,6 +20,7 @@ export default function MemoryViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { state, dispatch } = useApp();
+  const goBack = useAppBackNavigation("/collections");
   const [moreOpen, setMoreOpen] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [playing, setPlaying] = useState(false);
@@ -76,7 +78,7 @@ export default function MemoryViewPage() {
           <div className="empty-state">
             <div className="empty-state-icon"><Search size={48} strokeWidth={1.5} /></div>
             <p className="empty-state-title">Memory not found</p>
-            <button className="btn btn-secondary btn-sm" style={{ marginTop: 16 }} onClick={() => navigate(-1)}>Go Back</button>
+            <button className="btn btn-secondary btn-sm" style={{ marginTop: 16 }} onClick={goBack}>Go Back</button>
           </div>
         </div>
       </div>
@@ -89,7 +91,7 @@ export default function MemoryViewPage() {
     try {
       await deleteMemory(memory.id);
       dispatch({ type: "DELETE_MEMORY", payload: memory.id });
-      navigate(-1);
+      goBack();
     } catch (err) {
       console.error("Delete failed:", err);
     }
@@ -402,7 +404,7 @@ export default function MemoryViewPage() {
       <TopNav />
       <div className="main-content memory-view-page">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 16, paddingBottom: 8 }}>
-          <button className="back-btn" onClick={() => navigate("/collections")}>
+          <button className="back-btn" onClick={goBack} aria-label="Go back">
             <ArrowLeft size={16} strokeWidth={1.5} />
           </button>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

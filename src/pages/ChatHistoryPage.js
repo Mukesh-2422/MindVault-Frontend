@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { formatTime, formatDate } from "../utils/helpers";
+import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import { ArrowLeft, MessageSquare, Search, Trash2, X } from "lucide-react";
 import "../styles/global.css";
 import "../styles/pages.css";
@@ -9,6 +10,7 @@ import "../styles/pages.css";
 export default function ChatHistoryPage() {
   const navigate = useNavigate();
   const { state, loadChatHistory, deleteConversation } = useApp();
+  const goBack = useAppBackNavigation("/home");
   const chatHistory = state.chatHistory;
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState("all");
@@ -125,7 +127,7 @@ export default function ChatHistoryPage() {
       <div className="page-wrapper">
         <div className="main-content">
           <div className="page-header-row">
-            <button className="back-btn" onClick={() => navigate("/home")}>
+            <button className="back-btn" onClick={goBack} aria-label="Go back">
               <ArrowLeft size={16} strokeWidth={1.5} />
             </button>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -354,7 +356,7 @@ export default function ChatHistoryPage() {
                               className="related-memory-chip"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/memory/${mem.id}`);
+                                navigate(`/memory/${mem.id}`, { state: { from: "/chat-history" } });
                               }}
                               title={mem.preview}
                             >

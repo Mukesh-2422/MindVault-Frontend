@@ -2,6 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import TopNav from "../components/layout/TopNav";
 import { useApp } from "../context/AppContext";
+import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import {
   User, Lock, Globe, Sun, Trash2, MessageSquare, LogOut, ChevronRight,
   ArrowLeft,
@@ -36,6 +37,7 @@ const SETTINGS_SECTIONS = [
 export default function SettingsPage() {
   const navigate = useNavigate();
   const { handleLogout } = useApp();
+  const goBack = useAppBackNavigation("/profile");
 
   const onLogout = () => {
     handleLogout();
@@ -46,7 +48,7 @@ export default function SettingsPage() {
     <div className="app">
       <TopNav />
       <div className="main-content settings-page">
-        <button className="back-btn" onClick={() => navigate("/profile")}>
+        <button className="back-btn" onClick={goBack} aria-label="Go back">
           <ArrowLeft size={16} strokeWidth={1.5} />
         </button>
 

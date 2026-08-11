@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import TopNav from "../components/layout/TopNav";
 import FAB from "../components/layout/FAB";
 import { useApp } from "../context/AppContext";
+import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import {
   groupMemoriesByDate,
   getMemoryTypeIcon,
@@ -16,6 +17,7 @@ import "../styles/pages.css";
 export default function TimelinePage() {
   const navigate = useNavigate();
   const { state } = useApp();
+  const goBack = useAppBackNavigation("/home");
 
   const activeMemories = state.memories.filter((m) => !m.deleted);
   const sorted = [...activeMemories].sort(
@@ -27,7 +29,7 @@ export default function TimelinePage() {
     <div className="app">
       <TopNav />
       <div className="main-content timeline-page">
-        <button className="back-btn" onClick={() => navigate("/home")}>
+        <button className="back-btn" onClick={goBack} aria-label="Go back">
           <ArrowLeft size={16} strokeWidth={1.5} />
         </button>
         <div className="timeline-header">
@@ -59,7 +61,7 @@ export default function TimelinePage() {
                       <div className="timeline-dot" />
                       <div
                         className="timeline-card"
-                        onClick={() => navigate(`/memory/${m.id}`)}
+                        onClick={() => navigate(`/memory/${m.id}`, { state: { from: "/timeline" } })}
                       >
                         <div
                           style={{
