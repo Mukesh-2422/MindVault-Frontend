@@ -153,7 +153,7 @@ function appReducer(state, action) {
     case "LOAD_CHAT_SESSION":
       return {
         ...state,
-        activeChatId: action.payload,
+                activeConversationId: action.payload,
       };
     case "SET_MEMORY_SEARCH_RESULTS":
       return {

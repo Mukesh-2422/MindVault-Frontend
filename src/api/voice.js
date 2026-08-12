@@ -2,7 +2,7 @@ import { api } from "./client";
 
 export async function uploadVoiceMemory(formData) {
   const token = localStorage.getItem("mv_auth_token");
-  const response = await fetch(`${process.env.REACT_APP_API_URL || "http://localhost:5000"}/api/voice`, {
+    const response = await fetch(`${process.env.REACT_APP_API_URL || ""}/api/voice`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${token}`,

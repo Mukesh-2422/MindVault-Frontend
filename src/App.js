@@ -26,7 +26,8 @@ import {
   SettingsLanguagePage,
   SettingsAppearancePage,
   ChatHistoryPage,
-  ConversationViewPage,
+    ConversationViewPage,
+  VoiceMemoriesPage,
   VaultResetPage,
 } from "./pages";
 
@@ -219,6 +220,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <ConversationViewPage />
+          </ProtectedRoute>
+        }
+      />
+            <Route
+        path="/voice-memories"
+        element={
+          <ProtectedRoute>
+            <VoiceMemoriesPage />
           </ProtectedRoute>
         }
       />
