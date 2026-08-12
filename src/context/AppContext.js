@@ -234,9 +234,54 @@ export function AppProvider({ children }) {
     }
   }, [dispatch]);
 
-  const deleteConversation = useCallback(async (conversationId, messageIds = []) => {
+  // Persist the active Home-session conversation id so the latest conversation
+  // can be restored from the backend when returning to Home (source of truth).
+  const getPersistedActiveConv = () => {
     try {
-      await chatApi.deleteConversation(conversationId, messageIds);
+      return localStorage.getItem("mv_active_conversation");
+    } catch {
+      return null;
+    }
+  };
+  const persistActiveConv = (id) => {
+    try {
+      if (id) localStorage.setItem("mv_active_conversation", id);
+      else localStorage.removeItem("mv_active_conversation");
+    } catch {
+      /* ignore storage errors */
+    }
+  };
+
+  // Set + persist the active Home-session conversation id.
+  const setActiveConversationId = useCallback(
+    (id) => {
+      persistActiveConv(id);
+      dispatch({ type: "SET_ACTIVE_CONVERSATION_ID", payload: id });
+    },
+    [dispatch]
+  );
+
+  // Restore the active Home conversation from the backend on return to Home.
+  const loadActiveConversation = useCallback(async () => {
+    const id = getPersistedActiveConv();
+    if (!id) return null;
+    try {
+      const conversation = await chatApi.getConversation(id);
+      const msgs = conversation.messages || [];
+      if (msgs.length > 0) {
+        dispatch({ type: "SET_CURRENT_CHAT", payload: msgs });
+        dispatch({ type: "SET_ACTIVE_CONVERSATION_ID", payload: conversation.id || id });
+        return conversation;
+      }
+    } catch (err) {
+      console.error("Error restoring active conversation:", err);
+    }
+    return null;
+  }, [dispatch]);
+
+  const deleteConversation = useCallback(async (conversationId) => {
+    try {
+      await chatApi.deleteConversation(conversationId);
       // Reload chat history after deletion
       const chatHistory = await chatApi.getChatHistory();
       dispatch({ type: "SET_CHAT_HISTORY", payload: chatHistory });
@@ -247,12 +292,19 @@ export function AppProvider({ children }) {
     }
   }, [dispatch]);
 
-  const processChat = useCallback(async (userMessage, selectedMemoryId = null) => {
+  const processChat = useCallback(async (userMessage, selectedMemoryId = null, conversationId = null, requestId = null) => {
     try {
-      const result = await chatApi.sendMessage(userMessage, selectedMemoryId);
-      // Add to persistent chat history
-      if (result.user) dispatch({ type: "ADD_CHAT", payload: result.user });
-      if (result.assistant) dispatch({ type: "ADD_CHAT", payload: result.assistant });
+      const result = await chatApi.sendMessage(userMessage, selectedMemoryId, conversationId, requestId);
+      if (result?.conversationId) persistActiveConv(result.conversationId);
+      // Refresh the persisted chat history list from the backend so the
+      // summaries (title/latest preview/count) stay current. Home keeps its
+      // own active session in currentChat and is intentionally NOT overwritten.
+      try {
+        const list = await chatApi.getChatHistory();
+        dispatch({ type: "SET_CHAT_HISTORY", payload: list });
+      } catch (err) {
+        console.error("Failed to refresh chat history:", err);
+      }
       // Refresh memories to pick up any new relations
       const memories = await memoriesApi.getMemories();
       dispatch({ type: "SET_MEMORIES", payload: memories });
@@ -261,13 +313,18 @@ export function AppProvider({ children }) {
       console.error("Chat error:", err);
       return { error: err.message || "Something went wrong. Please try again." };
     }
-  }, []);
+  }, [dispatch]);
 
-  const selectMemoryContext = useCallback(async (memoryId) => {
+  const selectMemoryContext = useCallback(async (memoryId, conversationId = null) => {
     try {
-      const result = await chatApi.selectMemoryContext(memoryId);
-      // Add to persistent chat history
-      if (result.assistant) dispatch({ type: "ADD_CHAT", payload: result.assistant });
+      const result = await chatApi.selectMemoryContext(memoryId, conversationId);
+      if (result?.conversationId) persistActiveConv(result.conversationId);
+      try {
+        const list = await chatApi.getChatHistory();
+        dispatch({ type: "SET_CHAT_HISTORY", payload: list });
+      } catch (err) {
+        console.error("Failed to refresh chat history:", err);
+      }
       return result;
     } catch (err) {
       console.error("Memory selection error:", err);
@@ -288,15 +345,18 @@ export function AppProvider({ children }) {
   const handleLogout = useCallback(async () => {
     // Do NOT clear chat history from backend - just clear local state
     authApi.logout();
+    persistActiveConv(null);
     dispatch({ type: "LOGOUT" });
   }, [dispatch]);
 
-  const loadConversation = useCallback(async (conversationId, messageIds = null) => {
+  const loadConversation = useCallback(async (conversationId) => {
     try {
       dispatch({ type: "SET_LOADING", payload: true });
-      const conversation = await chatApi.getConversation(conversationId, messageIds);
+      const conversation = await chatApi.getConversation(conversationId);
       dispatch({ type: "SET_CURRENT_CHAT", payload: conversation.messages || [] });
-      dispatch({ type: "SET_ACTIVE_CONVERSATION_ID", payload: conversationId });
+      const convId = conversation.id || conversationId;
+      dispatch({ type: "SET_ACTIVE_CONVERSATION_ID", payload: convId });
+      persistActiveConv(convId);
     } catch (err) {
       console.error("Error loading conversation:", err);
       dispatch({ type: "SET_ERROR", payload: err.message || "Failed to load conversation" });
@@ -315,6 +375,8 @@ export function AppProvider({ children }) {
     loadData,
     loadChatHistory,
     loadConversation,
+    loadActiveConversation,
+    setActiveConversationId,
     deleteConversation,
     handleLogin,
     handleRegister,

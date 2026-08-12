@@ -314,6 +314,7 @@
   line-height: 1.6;
   color: var(--text-primary);
   word-wrap: break-word;
+  white-space: pre-wrap;
   box-shadow: var(--shadow-sm);
 }
 

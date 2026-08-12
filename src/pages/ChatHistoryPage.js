@@ -23,53 +23,12 @@ export default function ChatHistoryPage() {
     loadChatHistory();
   }, [loadChatHistory]);
 
-  // Group messages into conversations
+  // Conversations are now returned by the backend as structured summaries,
+  // each with a stable id, title, latest-message preview, message count, and
+  // memory references. No client-side grouping is needed.
   const conversations = useMemo(() => {
     if (!chatHistory || chatHistory.length === 0) return [];
-
-    const groups = [];
-    let currentGroup = null;
-    const GROUP_GAP_MS = 5 * 60 * 1000; // 5 minutes gap to start new conversation
-
-    chatHistory.forEach((msg) => {
-      const msgTime = new Date(msg.timestamp).getTime();
-
-      if (!currentGroup || msgTime - currentGroup.lastTimestamp > GROUP_GAP_MS) {
-        // Start new conversation
-        const firstUserMsg = msg.role === "user" ? msg.content : null;
-        currentGroup = {
-          id: msg.id,
-          messages: [msg],
-          firstTimestamp: msgTime,
-          lastTimestamp: msgTime,
-          title: firstUserMsg || msg.content,
-          preview: msg.content,
-          messageCount: 1,
-        };
-        groups.push(currentGroup);
-      } else {
-        // Add to existing conversation
-        currentGroup.messages.push(msg);
-        currentGroup.lastTimestamp = msgTime;
-        currentGroup.messageCount = currentGroup.messages.length;
-
-        // Set title from first user message
-        if (!currentGroup.title && msg.role === "user") {
-          currentGroup.title = msg.content;
-        }
-
-        // Build preview: first user message + first assistant response
-        if (!currentGroup.preview || currentGroup.preview === currentGroup.title) {
-          const firstUser = currentGroup.messages.find((m) => m.role === "user");
-          const firstAssistant = currentGroup.messages.find((m) => m.role === "assistant");
-          if (firstUser && firstAssistant) {
-            currentGroup.preview = `${firstUser.content}\n${firstAssistant.content}`;
-          }
-        }
-      }
-    });
-
-    return groups.reverse(); // Newest first
+    return chatHistory;
   }, [chatHistory]);
 
   // Filter conversations by date
@@ -82,7 +41,7 @@ export default function ChatHistoryPage() {
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     return conversations.filter((conv) => {
-      const convDate = new Date(conv.firstTimestamp);
+      const convDate = new Date(conv.updatedAt || conv.createdAt);
       if (dateFilter === "today") return convDate >= today;
       if (dateFilter === "yesterday") return convDate >= yesterday && convDate < today;
       if (dateFilter === "week") return convDate >= weekAgo;
@@ -96,10 +55,10 @@ export default function ChatHistoryPage() {
 
     const query = searchQuery.toLowerCase();
     return filteredConversations.filter((conv) => {
-      // Search in conversation preview
-      if (conv.preview.toLowerCase().includes(query)) return true;
-      // Search in any message content
-      return conv.messages.some((msg) => msg.content.toLowerCase().includes(query));
+      // Search in conversation preview and title
+      if (conv.preview && conv.preview.toLowerCase().includes(query)) return true;
+      if (conv.title && conv.title.toLowerCase().includes(query)) return true;
+      return false;
     });
   }, [filteredConversations, searchQuery]);
 
@@ -116,10 +75,7 @@ export default function ChatHistoryPage() {
     setDeletingId(conversationToDelete.id);
     setShowDeleteModal(false);
 
-    // Extract all message IDs from the conversation
-    const messageIds = conversationToDelete.messages.map(msg => msg.id);
-
-    const result = await deleteConversation(conversationToDelete.id, messageIds);
+    const result = await deleteConversation(conversationToDelete.id);
 
     setDeletingId(null);
     setConversationToDelete(null);
@@ -269,11 +225,7 @@ export default function ChatHistoryPage() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {searchedConversations.map((conv) => {
-                const assistantResponses = conv.messages.filter((m) => m.role === "assistant");
-                const hasRelatedMemories = assistantResponses.some(
-                  (m) => m.relatedMemories && m.relatedMemories.length > 0
-                );
-
+                const hasRelatedMemories = Array.isArray(conv.memoryRefs) && conv.memoryRefs.length > 0;
                 return (
                   <div
                     key={conv.id}
@@ -313,8 +265,7 @@ export default function ChatHistoryPage() {
                             color: "var(--text-tertiary)",
                           }}
                         >
-                          {formatDate(conv.firstTimestamp)} · {conv.messageCount || conv.messages.length} message
-                          {(conv.messageCount || conv.messages.length) !== 1 ? "s" : ""}
+                          {formatDate(conv.updatedAt)} · {conv.messageCount || 0} message{conv.messageCount !== 1 ? "s" : ""}
                         </div>
                       </div>
                       <button
@@ -359,24 +310,19 @@ export default function ChatHistoryPage() {
                     {/* Related Memories */}
                     {hasRelatedMemories && (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                        {assistantResponses
-                          .filter((m) => m.relatedMemories && m.relatedMemories.length > 0)
-                          .slice(0, 1) // Show memories from first response only
-                          .flatMap((m) => m.relatedMemories)
-                          .slice(0, 3)
-                          .map((mem) => (
-                            <button
-                              key={mem.id}
-                              className="related-memory-chip"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/memory/${mem.id}`, { state: { from: "/chat-history" } });
-                              }}
-                              title={mem.preview}
-                            >
-                              {mem.title}
-                            </button>
-                          ))}
+                        {conv.memoryRefs.slice(0, 3).map((mem) => (
+                          <button
+                            key={mem.id}
+                            className="related-memory-chip"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/memory/${mem.id}`, { state: { from: "/chat-history" } });
+                            }}
+                            title={mem.title}
+                          >
+                            {mem.title}
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>

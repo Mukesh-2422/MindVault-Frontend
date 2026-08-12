@@ -22,6 +22,7 @@ export default function HomePage() {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const recognitionRef = useRef(null);
+  const isSubmittingRef = useRef(false);
   // Use state.currentChat from context instead of local state
   // const [localChat, setLocalChat] = useState([]);
   const [chatError, setChatError] = useState(null);
@@ -42,6 +43,13 @@ export default function HomePage() {
     }
     prevAuthRef.current = isAuthenticated;
   }, [state.isAuthenticated, dispatch]);
+
+  // Keep the Home chat positioned at the latest message (not the first).
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [state.currentChat, isTyping]);
 
   const onThisDay = getOnThisDay(state.memories);
 
@@ -158,6 +166,9 @@ export default function HomePage() {
 
   const handleSendWithText = async (text) => {
     if (!text.trim()) return;
+    // Guard against duplicate submissions from voice/text paths.
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setInput("");
     setChatError(null);
     setMemorySearchResults([]);
@@ -170,8 +181,12 @@ export default function HomePage() {
     };
     dispatch({ type: "ADD_CURRENT_CHAT_MESSAGE", payload: userMsg });
     setIsTyping(true);
+    const requestId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     try {
-      const result = await processChat(text, selectedMemory);
+      const result = await processChat(text, selectedMemory, state.activeConversationId, requestId);
+      if (result?.conversationId) {
+        dispatch({ type: "SET_ACTIVE_CONVERSATION_ID", payload: result.conversationId });
+      }
       if (result?.user) {
         // Replace the temporary local message with the backend message
         dispatch({ type: "REPLACE_CURRENT_CHAT_MESSAGE", payload: { localId: userMsg.id, message: result.user } });
@@ -185,6 +200,7 @@ export default function HomePage() {
       setChatError("Failed to get a response. Please try again.");
     } finally {
       setIsTyping(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -207,6 +223,9 @@ export default function HomePage() {
   const handleSend = async () => {
     const msg = input.trim();
     if (!msg) return;
+    // Guard against duplicate submissions (e.g. rapid Enter presses).
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setInput("");
     setChatError(null);
     setMemorySearchResults([]);
@@ -217,10 +236,14 @@ export default function HomePage() {
       content: msg,
       timestamp: new Date().toISOString(),
     };
+    const requestId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     dispatch({ type: "ADD_CURRENT_CHAT_MESSAGE", payload: userMsg });
     setIsTyping(true);
     try {
-      const result = await processChat(msg, selectedMemory);
+      const result = await processChat(msg, selectedMemory, state.activeConversationId, requestId);
+      if (result?.conversationId) {
+        dispatch({ type: "SET_ACTIVE_CONVERSATION_ID", payload: result.conversationId });
+      }
       if (result?.user) {
         // Replace the temporary local message with the backend message
         dispatch({ type: "REPLACE_CURRENT_CHAT_MESSAGE", payload: { localId: userMsg.id, message: result.user } });
@@ -234,14 +257,20 @@ export default function HomePage() {
       setChatError("Failed to get a response. Please try again.");
     } finally {
       setIsTyping(false);
+      isSubmittingRef.current = false;
     }
   };
 
   const handleSelectMemory = async (memoryId) => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setMemorySearchResults([]);
     setIsTyping(true);
     try {
-      const result = await selectMemoryContext(memoryId);
+      const result = await selectMemoryContext(memoryId, state.activeConversationId);
+      if (result?.conversationId) {
+        dispatch({ type: "SET_ACTIVE_CONVERSATION_ID", payload: result.conversationId });
+      }
       if (result?.assistant) {
         dispatch({ type: "ADD_CURRENT_CHAT_MESSAGE", payload: result.assistant });
         setSelectedMemory(memoryId);
@@ -252,6 +281,7 @@ export default function HomePage() {
       setChatError("Failed to select memory. Please try again.");
     } finally {
       setIsTyping(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -471,9 +501,10 @@ export default function HomePage() {
               <Mic size={18} strokeWidth={1.5} />
             </button>
             <button
+              type="button"
               className="chat-send-btn"
               onClick={handleSend}
-              disabled={!input.trim()}
+              disabled={!input.trim() || isTyping}
               title="Send"
             >
               <Send size={16} strokeWidth={2} />
