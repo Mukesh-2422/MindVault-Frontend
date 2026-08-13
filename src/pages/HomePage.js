@@ -433,14 +433,10 @@ export default function HomePage() {
                               key={mem.id}
                               className={`chat-source-card ${selectedMemory === mem.id ? "selected" : ""}`}
                               onClick={() => navigate(`/memory/${mem.id}`, { state: { from: "/home" } })}
+                              title={mem.title}
+                              aria-label={`Open memory: ${mem.title}`}
                             >
-                              <div className="chat-source-title">
-                                {mem.title}
-                                <span className="chat-source-arrow">→</span>
-                              </div>
-                              <div className="chat-source-preview">
-                                {mem.preview || "No preview available"}
-                              </div>
+                              {mem.title}
                             </button>
                           ))}
                         </div>
