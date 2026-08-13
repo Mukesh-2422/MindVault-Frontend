@@ -141,7 +141,7 @@ export default function HomePage() {
       const currentInput = inputRef.current?.value;
       if (currentInput && currentInput.trim()) {
         setInput(currentInput);
-        handleVoiceSearch(currentInput);
+        handleSendWithText(currentInput);
       }
     };
 
@@ -432,7 +432,7 @@ export default function HomePage() {
                             <button
                               key={mem.id}
                               className={`chat-source-card ${selectedMemory === mem.id ? "selected" : ""}`}
-                              onClick={() => handleSelectMemory(mem.id)}
+                              onClick={() => navigate(`/memory/${mem.id}`, { state: { from: "/home" } })}
                             >
                               <div className="chat-source-title">
                                 {mem.title}

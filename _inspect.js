@@ -1,0 +1,11 @@
+const fs = require('fs');
+const L = fs.readFileSync('src/pages/HomePage.js', 'utf8').split('\n');
+let out = '';
+for (let i = 82; i < 184; i++) out += (i+1) + '|' + (L[i]||'') + '\n';
+fs.writeFileSync('d:/New folder (2)/_hp_a.txt', out);
+console.log('handleSendWithText defined?', L.some((l)=>l.includes('handleSendWithText')));
+console.log('handleVoiceSearch defined?', L.some((l)=>l.includes('handleVoiceSearch')));
+console.log('handleSend defined?', L.some((l)=>l.includes('handleSend')));
+console.log('handleSelectMemory defined?', L.some((l)=>l.includes('handleSelectMemory')));
+console.log('toggleListening defined?', L.some((l)=>l.includes('toggleListening')));
+console.log('lines 82-184 written');
