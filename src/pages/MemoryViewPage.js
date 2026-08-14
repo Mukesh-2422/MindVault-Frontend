@@ -7,8 +7,8 @@ import {
   formatFullDate, formatTime, getMemoryTypeIcon, truncate,
 } from "../utils/helpers";
 import {
-  ArrowLeft, Pin, MoreHorizontal, Download, Lock, Trash2, Play, Square, Folder, User, Search,
-  FileText, Copy, Image as ImageIcon, Mic, Video as VideoIcon, CheckSquare, Save,
+  ArrowLeft, Pin, MoreHorizontal, Download, Lock, Trash2, Play, Pause, Folder, User, Search,
+  FileText, Copy, Image as ImageIcon, Mic, Video as VideoIcon, CheckSquare, Save, X, Plus, Check
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { getMediaUrl } from "../api/voice";
@@ -20,24 +20,42 @@ export default function MemoryViewPage() {
   const navigate = useNavigate();
   const { state, dispatch } = useApp();
   const goBack = useAppBackNavigation("/collections");
+
+  const memory = state.memories.find((m) => m.id === id);
+
   const [moreOpen, setMoreOpen] = useState(false);
-  const [speed, setSpeed] = useState(1);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
-  const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
+  const [editTags, setEditTags] = useState([]);
+  const [tagInput, setTagInput] = useState("");
+  const [editChecklist, setEditChecklist] = useState([]);
+  const [newChecklistText, setNewChecklistText] = useState("");
   const [saving, setSaving] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState("");
+
   const audioRef = useRef(null);
   const moreRef = useRef(null);
   const titleInputRef = useRef(null);
   const contentInputRef = useRef(null);
   const autoSaveTimerRef = useRef(null);
 
-  const memory = state.memories.find((m) => m.id === id);
+  // Sync state when memory is loaded or changed
+  useEffect(() => {
+    if (memory) {
+      setEditTitle(memory.title || "");
+      setEditContent(memory.content || "");
+      setEditTags(memory.tags || []);
+      setEditChecklist(memory.checklist || []);
+      if (memory.duration) {
+        setAudioDuration(memory.duration);
+      }
+    }
+  }, [memory]);
 
+  // Click outside to close 3-dots more menu
   useEffect(() => {
     const handleClick = (e) => {
       if (moreRef.current && !moreRef.current.contains(e.target)) {
@@ -45,25 +63,17 @@ export default function MemoryViewPage() {
       }
     };
     document.addEventListener("mousedown", handleClick);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-    };
+    return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  // Auto-resize content textarea as user types
   useEffect(() => {
-    if (isEditing && titleInputRef.current) {
-      titleInputRef.current.focus();
-    }
-  }, [isEditing]);
-
-  // Auto-resize the content textarea to fit its content (no large empty box)
-  useEffect(() => {
-    if (isEditing && contentInputRef.current) {
+    if (contentInputRef.current) {
       const el = contentInputRef.current;
       el.style.height = "auto";
-      el.style.height = el.scrollHeight + "px";
+      el.style.height = Math.max(100, el.scrollHeight) + "px";
     }
-  }, [isEditing, editContent]);
+  }, [editContent]);
 
   if (!memory) {
     return (
@@ -90,8 +100,6 @@ export default function MemoryViewPage() {
     );
   }
 
-  const relatedMemories = [];
-
   const handleDelete = async () => {
     try {
       await deleteMemory(memory.id);
@@ -104,182 +112,117 @@ export default function MemoryViewPage() {
 
   const handlePin = async () => {
     try {
-      const updated = await togglePinMemory(memory.id);
+      await togglePinMemory(memory.id);
       dispatch({ type: "TOGGLE_PIN", payload: memory.id });
     } catch (err) {
       console.error("Pin toggle failed:", err);
     }
   };
 
-  const startEditing = () => {
-    setEditTitle(memory.title);
-    setEditContent(memory.content || "");
-    setIsEditing(true);
-  };
-
-  const cancelEditing = () => {
-    setIsEditing(false);
-    setEditTitle("");
-    setEditContent("");
-    setAutoSaveStatus("");
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-    }
-  };
-
   const performSave = async () => {
-    if (!editTitle.trim() && !editContent.trim()) {
-      cancelEditing();
-      return;
-    }
     setSaving(true);
     setAutoSaveStatus("Saving...");
     try {
-      await updateMemory(memory.id, {
-        title: editTitle.trim() || memory.title,
-        content: editContent.trim(),
-        date: new Date().toISOString(),
-      });
-      // Fetch the updated memory to ensure we have the latest data
+      const updatedPayload = {
+        title: editTitle.trim() || memory.title || "Untitled Memory",
+        content: editContent,
+        tags: editTags,
+        checklist: memory.type === "checklist" ? editChecklist : undefined,
+        date: memory.date || new Date().toISOString(),
+      };
+      await updateMemory(memory.id, updatedPayload);
       const updated = await getMemory(memory.id);
-      console.log("Updated memory:", updated);
-      dispatch({ type: "UPDATE_MEMORY", payload: updated });
+      dispatch({ type: "UPDATE_MEMORY", payload: updated || { ...memory, ...updatedPayload } });
       setAutoSaveStatus("Saved");
       setTimeout(() => setAutoSaveStatus(""), 2000);
     } catch (err) {
       console.error("Update failed:", err);
       setAutoSaveStatus("Failed to save");
-      alert("Failed to save changes. Please try again.");
+      setTimeout(() => setAutoSaveStatus(""), 2000);
     } finally {
       setSaving(false);
     }
   };
 
-  const saveEdits = async () => {
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-    }
-    await performSave();
-    setIsEditing(false);
-    setEditTitle("");
-    setEditContent("");
-  };
-
-  const triggerAutoSave = () => {
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-    }
-    autoSaveTimerRef.current = setTimeout(() => {
-      performSave();
-    }, 1500);
-  };
-
-  const handleTitleChange = (e) => {
-    setEditTitle(e.target.value);
-    triggerAutoSave();
-  };
-
-  const handleContentChange = (e) => {
-    setEditContent(e.target.value);
-    triggerAutoSave();
-  };
-
-  const togglePlay = async () => {
-    if (!audioRef.current) {
-      console.error("Audio ref not found");
-      return;
-    }
-    
-    try {
-      if (playing) {
-        audioRef.current.pause();
-        setPlaying(false);
-      } else {
-        // Ensure audio is ready
-        if (audioRef.current.readyState < 2) {
-          await new Promise((resolve, reject) => {
-            const onCanPlay = () => {
-              audioRef.current.removeEventListener('canplay', onCanPlay);
-              audioRef.current.removeEventListener('error', onError);
-              resolve();
-            };
-            const onError = (err) => {
-              audioRef.current.removeEventListener('canplay', onCanPlay);
-              audioRef.current.removeEventListener('error', onError);
-              reject(new Error('Audio failed to load'));
-            };
-            audioRef.current.addEventListener('canplay', onCanPlay);
-            audioRef.current.addEventListener('error', onError);
-          });
-        }
-        await audioRef.current.play();
-        setPlaying(true);
+  const handleAddTag = (e) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      const cleanTag = tagInput.trim().replace(/^#/, "").toLowerCase();
+      if (cleanTag && !editTags.includes(cleanTag)) {
+        setEditTags([...editTags, cleanTag]);
       }
-    } catch (err) {
-      console.error("Playback error:", err);
-      alert("Unable to play audio. The file may be corrupted or the browser blocked autoplay.");
+      setTagInput("");
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove) => {
+    setEditTags(editTags.filter((t) => t !== tagToRemove));
+  };
+
+  const toggleChecklistItem = (itemId) => {
+    const updated = editChecklist.map((item) =>
+      item.id === itemId ? { ...item, done: !item.done } : item
+    );
+    setEditChecklist(updated);
+  };
+
+  const addChecklistItem = () => {
+    if (!newChecklistText.trim()) return;
+    const newItem = {
+      id: `chk_${Date.now()}`,
+      text: newChecklistText.trim(),
+      done: false,
+    };
+    setEditChecklist([...editChecklist, newItem]);
+    setNewChecklistText("");
+  };
+
+  const removeChecklistItem = (itemId) => {
+    setEditChecklist(editChecklist.filter((item) => item.id !== itemId));
+  };
+
+  // Audio Playback Controls
+  const toggleAudioPlay = () => {
+    if (!audioRef.current) return;
+    if (playing) {
+      audioRef.current.pause();
       setPlaying(false);
+    } else {
+      audioRef.current.play();
+      setPlaying(true);
     }
   };
 
   const handleTimeUpdate = () => {
-    if (!audioRef.current) return;
-    setCurrentTime(audioRef.current.currentTime);
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
   };
 
   const handleLoadedMetadata = () => {
-    if (!audioRef.current) return;
-    setAudioDuration(audioRef.current.duration);
+    if (audioRef.current && audioRef.current.duration) {
+      setAudioDuration(audioRef.current.duration);
+    }
   };
 
-  const handleEnded = () => {
-    setPlaying(false);
-    setCurrentTime(0);
-  };
-
-  const formatAudioTime = (sec) => {
-    if (!sec || isNaN(sec)) return "0:00";
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
-
-  const cycleSpeed = () => {
-    const speeds = [0.5, 1, 1.5, 2];
-    const next = speeds[(speeds.indexOf(speed) + 1) % speeds.length];
-    setSpeed(next);
-    if (audioRef.current) audioRef.current.playbackRate = next;
-  };
-
-  const handleSeek = (e) => {
+  const handleSeekWaveform = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const pct = x / rect.width;
-    if (audioRef.current) {
+    if (audioRef.current && audioDuration > 0) {
       audioRef.current.currentTime = pct * audioDuration;
       setCurrentTime(audioRef.current.currentTime);
     }
   };
 
-  // ===== Export Functions =====
-
-  const getMemoryTextContent = () => {
-    let text = `${memory.title}\n`;
-    text += `${formatFullDate(memory.date)} at ${formatTime(memory.date)}\n`;
-    text += `${"=".repeat(40)}\n\n`;
-    if (memory.type === "checklist" && memory.checklist) {
-      memory.checklist.forEach((item) => {
-        text += `${item.done ? "[x]" : "[ ]"} ${item.text}\n`;
-      });
-    } else {
-      text += `${memory.content || ""}\n`;
-    }
-    if (memory.tags && memory.tags.length > 0) {
-      text += `\n${"=".repeat(40)}\nTags: ${memory.tags.join(", ")}\n`;
-    }
-    return text;
+  const formatAudioTime = (seconds) => {
+    if (!seconds || isNaN(seconds) || seconds < 0) return "0:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
+  // Export as PDF
   const exportAsPDF = () => {
     setMoreOpen(false);
     const doc = new jsPDF();
@@ -288,179 +231,95 @@ export default function MemoryViewPage() {
     const maxWidth = pageWidth - margin * 2;
     let y = 20;
 
-    // Title
     doc.setFontSize(20);
     doc.setFont(undefined, "bold");
-    const titleLines = doc.splitTextToSize(memory.title, maxWidth);
+    const titleLines = doc.splitTextToSize(editTitle || memory.title, maxWidth);
     doc.text(titleLines, margin, y);
     y += titleLines.length * 10 + 4;
 
-    // Date
     doc.setFontSize(10);
     doc.setFont(undefined, "normal");
     doc.setTextColor(100, 100, 100);
     doc.text(`${formatFullDate(memory.date)} at ${formatTime(memory.date)}`, margin, y);
     y += 8;
 
-    // Divider
     doc.setDrawColor(200, 200, 200);
     doc.line(margin, y, pageWidth - margin, y);
     y += 10;
 
-    // Content
     doc.setFontSize(12);
     doc.setTextColor(40, 40, 40);
-    if (memory.type === "checklist" && memory.checklist) {
-      memory.checklist.forEach((item) => {
+    if (memory.type === "checklist" && editChecklist.length > 0) {
+      editChecklist.forEach((item) => {
         const prefix = item.done ? "[x] " : "[ ] ";
         const lines = doc.splitTextToSize(prefix + item.text, maxWidth);
-        if (y + lines.length * 7 > doc.internal.pageSize.getHeight() - 20) {
-          doc.addPage();
-          y = 20;
-        }
         doc.text(lines, margin, y);
-        y += lines.length * 7 + 2;
+        y += lines.length * 7;
       });
-    } else {
-      const contentLines = doc.splitTextToSize(memory.content || "", maxWidth);
-      contentLines.forEach((line) => {
-        if (y > doc.internal.pageSize.getHeight() - 20) {
-          doc.addPage();
-          y = 20;
-        }
-        doc.text(line, margin, y);
-        y += 7;
-      });
+    } else if (editContent) {
+      const contentLines = doc.splitTextToSize(editContent, maxWidth);
+      doc.text(contentLines, margin, y);
+      y += contentLines.length * 7;
     }
 
-    // Tags
-    if (memory.tags && memory.tags.length > 0) {
-      y += 6;
-      doc.setDrawColor(200, 200, 200);
-      doc.line(margin, y, pageWidth - margin, y);
-      y += 8;
+    if (editTags && editTags.length > 0) {
+      y += 10;
       doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
-      doc.text(`Tags: ${memory.tags.join(", ")}`, margin, y);
+      doc.text(`Tags: ${editTags.map((t) => `#${t}`).join(" ")}`, margin, y);
     }
 
-    // Footer
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(150, 150, 150);
-      doc.text("MindVault - Your personal memory space", margin, doc.internal.pageSize.getHeight() - 10);
-    }
-
-    doc.save(`${memory.title.replace(/[^a-z0-9]/gi, "_")}.pdf`);
+    doc.save(`${(editTitle || memory.title || "memory").replace(/[^a-z0-9]/gi, "_")}.pdf`);
   };
 
-  const exportAsDocument = () => {
+  const copyTextToClipboard = () => {
     setMoreOpen(false);
-    const content = getMemoryTextContent();
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${memory.title.replace(/[^a-z0-9]/gi, "_")}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const copyAsText = async () => {
-    setMoreOpen(false);
-    const content = getMemoryTextContent();
-    try {
-      await navigator.clipboard.writeText(content);
-      alert("Memory copied to clipboard!");
-    } catch (err) {
-      // Fallback
-      const textarea = document.createElement("textarea");
-      textarea.value = content;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-      alert("Memory copied to clipboard!");
-    }
-  };
-
-  const downloadMedia = () => {
-    setMoreOpen(false);
-    const mediaUrl = memory.mediaUrl || memory.mediaData;
-    if (!mediaUrl) {
-      alert("No media file available to download.");
-      return;
-    }
-    const a = document.createElement("a");
-    a.href = mediaUrl;
-    const ext = memory.type === "image" ? "png" : memory.type === "voice" ? "mp3" : "mp4";
-    a.download = `${memory.title.replace(/[^a-z0-9]/gi, "_")}.${ext}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    let text = `${editTitle || memory.title}\n\n`;
+    if (editContent) text += `${editContent}\n\n`;
+    if (editTags.length > 0) text += `Tags: ${editTags.map((t) => `#${t}`).join(" ")}`;
+    navigator.clipboard.writeText(text);
+    setAutoSaveStatus("Copied to clipboard!");
+    setTimeout(() => setAutoSaveStatus(""), 2000);
   };
 
   return (
     <div className="new-memory-page">
+      {/* Top Action Bar / Header */}
       <nav className="memory-editor-nav">
         <div className="editor-nav-left">
-          <button className="editor-nav-btn" onClick={goBack} aria-label="Go back">
+          <button className="editor-nav-btn" onClick={goBack} aria-label="Go back" title="Go back">
             <ArrowLeft size={16} strokeWidth={1.5} />
           </button>
         </div>
 
         <div className="editor-nav-center">
-          <span style={{ display: "flex" }}>{getMemoryTypeIcon(memory.type, 20)}</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {getMemoryTypeIcon(memory.type, 16)}
+            <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+              {formatFullDate(memory.date)} · {formatTime(memory.date)}
+            </span>
+          </span>
         </div>
 
         <div className="editor-nav-right">
-          <div style={{ position: "relative" }} ref={moreRef}>
+          {/* More Options Dropdown */}
+          <div className="dropdown" ref={moreRef}>
             <button
               className="editor-nav-btn"
               onClick={() => setMoreOpen(!moreOpen)}
               aria-label="More options"
-              aria-expanded={moreOpen}
+              title="More options"
             >
               <MoreHorizontal size={16} strokeWidth={1.5} />
             </button>
             {moreOpen && (
-              <div
-                className="dropdown-menu"
-                style={{ right: 0, top: "calc(100% + 4px)", minWidth: 200 }}
-              >
-                {(memory.type === "text" || memory.type === "checklist") && (
-                  <>
-                    <button className="dropdown-item" onClick={exportAsPDF}>
-                      <FileText size={16} strokeWidth={1.5} /> Export as PDF
-                    </button>
-                    <button className="dropdown-item" onClick={exportAsDocument}>
-                      <Download size={16} strokeWidth={1.5} /> Export as Document
-                    </button>
-                    <button className="dropdown-item" onClick={copyAsText}>
-                      <Copy size={16} strokeWidth={1.5} /> Copy as Text
-                    </button>
-                  </>
-                )}
-                {memory.type === "image" && (
-                  <button className="dropdown-item" onClick={downloadMedia}>
-                    <ImageIcon size={16} strokeWidth={1.5} /> Download Image
-                  </button>
-                )}
-                {memory.type === "voice" && (
-                  <button className="dropdown-item" onClick={downloadMedia}>
-                    <Mic size={16} strokeWidth={1.5} /> Download Audio
-                  </button>
-                )}
-                {memory.type === "video" && (
-                  <button className="dropdown-item" onClick={downloadMedia}>
-                    <VideoIcon size={16} strokeWidth={1.5} /> Download Video
-                  </button>
-                )}
-                <div className="dropdown-divider" />
+              <div className="dropdown-menu" style={{ right: 0, top: "100%" }}>
+                <button className="dropdown-item" onClick={copyTextToClipboard}>
+                  <Copy size={16} strokeWidth={1.5} /> Copy Text
+                </button>
+                <button className="dropdown-item" onClick={exportAsPDF}>
+                  <Download size={16} strokeWidth={1.5} /> Export as PDF
+                </button>
                 <button
                   className="dropdown-item"
                   onClick={async () => {
@@ -470,7 +329,7 @@ export default function MemoryViewPage() {
                       dispatch({ type: "DELETE_MEMORY", payload: memory.id });
                       dispatch({ type: "UNLOCK_VAULT" });
                       navigate("/vault");
-                    } catch (err) {
+                    } catch {
                       alert("Failed to move memory to vault.");
                     }
                   }}
@@ -485,12 +344,13 @@ export default function MemoryViewPage() {
                     setMoreOpen(false);
                   }}
                 >
-                  <Trash2 size={16} strokeWidth={1.5} /> Delete
+                  <Trash2 size={16} strokeWidth={1.5} /> Delete Memory
                 </button>
               </div>
             )}
           </div>
 
+          {/* Pin Button */}
           <button
             className="editor-nav-btn"
             onClick={handlePin}
@@ -501,230 +361,155 @@ export default function MemoryViewPage() {
             <Pin size={16} strokeWidth={1.5} />
           </button>
 
+          {/* Save Button */}
           <button
             className="editor-nav-btn save-btn"
-            onClick={isEditing ? saveEdits : () => { startEditing(); }}
+            onClick={performSave}
             disabled={saving}
-            aria-label="Save"
+            aria-label="Save changes"
+            title="Save memory"
           >
-            <Save size={16} strokeWidth={1.5} />
-            {saving ? "Saving..." : "Save"}
+            <Save size={15} strokeWidth={1.75} />
+            <span>{saving ? "Saving..." : "Save"}</span>
           </button>
         </div>
       </nav>
 
+      {/* Editor Content Area */}
       <div className="memory-editor-content memory-view-page">
+        {/* Status indicator */}
+        {autoSaveStatus && (
+          <div style={{
+            fontSize: 12,
+            color: autoSaveStatus === "Saved" ? "#10B981" : autoSaveStatus === "Failed to save" ? "#EF4444" : "var(--text-tertiary)",
+            marginBottom: 12,
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+          }}>
+            {autoSaveStatus === "Saved" && <Check size={14} />}
+            <span>{autoSaveStatus}</span>
+          </div>
+        )}
 
-        <div className="memory-view-meta">
-          <span className="memory-view-type">{getMemoryTypeIcon(memory.type, 20)}</span>
-          <span className="memory-view-date">{formatFullDate(memory.date)} {"\u00b7"} {formatTime(memory.date)}</span>
-          {memory.pinned && <span style={{ display: "flex" }}><Pin size={14} strokeWidth={2} /></span>}
-        </div>
+        {/* Title Input */}
+        <input
+          ref={titleInputRef}
+          className="memory-title-input"
+          value={editTitle}
+          onChange={(e) => setEditTitle(e.target.value)}
+          placeholder="Untitled Memory"
+          style={{ marginBottom: 16 }}
+        />
 
-        {isEditing ? (
-          <div>
-            <input
-              ref={titleInputRef}
-              className="memory-title-input"
-              value={editTitle}
-              onChange={handleTitleChange}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  saveEdits();
-                }
-                if (e.key === "Escape") {
-                  cancelEditing();
-                }
-              }}
-            />
-            {autoSaveStatus && (
-              <span style={{ fontSize: 12, color: autoSaveStatus === "Saved" ? "#10B981" : autoSaveStatus === "Failed to save" ? "#EF4444" : "var(--text-tertiary)", marginTop: 4, display: "inline-block" }}>
-                {autoSaveStatus}
-              </span>
+        {/* Media Container: Image */}
+        {memory.type === "image" && (
+          <div className="memory-media-container" style={{ marginBottom: 20, textAlign: "center" }}>
+            {(memory.mediaUrl || memory.mediaData || memory.imageUrl) ? (
+              <img
+                src={getMediaUrl(memory.mediaUrl || memory.mediaData || memory.imageUrl)}
+                alt={editTitle || memory.title}
+                style={{
+                  width: "100%",
+                  maxHeight: 450,
+                  objectFit: "contain",
+                  borderRadius: "16px",
+                  backgroundColor: "#020617",
+                  border: "1px solid var(--border-color)",
+                }}
+              />
+            ) : (
+              <div className="image-placeholder">{getMemoryTypeIcon("image", 48)}</div>
             )}
           </div>
-        ) : (
-          <h1 className="memory-view-title" onClick={startEditing} style={{ cursor: "pointer" }} title="Click to edit">
-            {memory.title}
-          </h1>
         )}
 
-        {memory.tags?.length > 0 && (
-          <div className="memory-view-tags">
-            {memory.tags.map((tag) => <span key={tag} className="tag">{tag}</span>)}
-          </div>
-        )}
-
-        {memory.type === "text" && (
-          isEditing ? (
-            <div>
-              <textarea
-                ref={contentInputRef}
-                className="memory-body-input"
-                value={editContent}
-                onChange={handleContentChange}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") {
-                    cancelEditing();
-                  }
-                }}
-                autoFocus
-              />
-              {autoSaveStatus && (
-                <span style={{ fontSize: 12, color: autoSaveStatus === "Saved" ? "#10B981" : autoSaveStatus === "Failed to save" ? "#EF4444" : "var(--text-tertiary)", marginTop: 4, display: "inline-block" }}>
-                  {autoSaveStatus}
-                </span>
-              )}
-            </div>
-          ) : (
-            <p className="memory-view-content" onClick={startEditing} style={{ cursor: "pointer" }} title="Click to edit">
-              {memory.content}
-            </p>
-          )
-        )}
-
+        {/* Media Container: Audio / Voice */}
         {memory.type === "voice" && (
-          <div className="voice-player">
-            {(memory.mediaUrl || memory.mediaData) ? (
-              <audio
-                ref={audioRef}
-                src={getMediaUrl(memory.mediaUrl || memory.mediaData)}
-                onTimeUpdate={handleTimeUpdate}
-                onLoadedMetadata={handleLoadedMetadata}
-                onEnded={handleEnded}
-                onError={(e) => {
-                  console.error("Audio loading error:", e);
-                  console.error("Audio src:", getMediaUrl(memory.mediaUrl || memory.mediaData));
-                }}
-                preload="auto"
-                controls
-                controlsList="nodownload"
-                style={{ width: "100%", marginBottom: 16 }}
-              />
+          <div className="voice-player" style={{ marginBottom: 20 }}>
+            {(memory.mediaUrl || memory.mediaData || memory.audioUrl) ? (
+              <>
+                <audio
+                  ref={audioRef}
+                  src={getMediaUrl(memory.mediaUrl || memory.mediaData || memory.audioUrl)}
+                  onTimeUpdate={handleTimeUpdate}
+                  onLoadedMetadata={handleLoadedMetadata}
+                  onEnded={() => setPlaying(false)}
+                />
+                <div className="voice-player-header">
+                  <button
+                    type="button"
+                    className="voice-player-btn"
+                    onClick={toggleAudioPlay}
+                    title={playing ? "Pause" : "Play"}
+                  >
+                    {playing ? <Pause size={20} /> : <Play size={20} style={{ marginLeft: 2 }} />}
+                  </button>
+                  <div className="voice-player-info">
+                    <div className="voice-player-title">{editTitle || memory.title || "Voice Recording"}</div>
+                    <div className="voice-player-duration">
+                      {formatAudioTime(currentTime)} / {formatAudioTime(audioDuration)}
+                    </div>
+                  </div>
+                </div>
+                <div
+                  className="voice-waveform"
+                  onClick={handleSeekWaveform}
+                  style={{ cursor: "pointer" }}
+                >
+                  <div
+                    className="voice-waveform-progress"
+                    style={{ width: `${audioDuration > 0 ? (currentTime / audioDuration) * 100 : 0}%` }}
+                  />
+                </div>
+              </>
             ) : (
               <div style={{ padding: 20, textAlign: "center", color: "var(--text-tertiary)" }}>
                 <Mic size={32} strokeWidth={1.5} style={{ marginBottom: 8 }} />
                 <p>No audio file available</p>
               </div>
             )}
-            {memory.content && (
-              isEditing ? (
-                <div>
-                  <textarea
-                    ref={contentInputRef}
-                    className="memory-body-input"
-                    value={editContent}
-                    onChange={handleContentChange}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") {
-                        cancelEditing();
-                      }
-                    }}
-                    autoFocus
-                    style={{ marginTop: 14 }}
-                  />
-                  {autoSaveStatus && (
-                    <span style={{ fontSize: 12, color: autoSaveStatus === "Saved" ? "#10B981" : autoSaveStatus === "Failed to save" ? "#EF4444" : "var(--text-tertiary)", marginTop: 4, display: "inline-block" }}>
-                      {autoSaveStatus}
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <p style={{ marginTop: 14, fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.6, cursor: "pointer" }} onClick={startEditing} title="Click to edit">
-                  {memory.content}
-                </p>
-              )
-            )}
           </div>
         )}
 
-        {memory.type === "image" && (
-          <div>
-            {(memory.mediaUrl || memory.mediaData) ? (
-              <img src={getMediaUrl(memory.mediaUrl || memory.mediaData)} alt={memory.title} style={{ width: "100%", maxHeight: 400, objectFit: "contain", borderRadius: "var(--radius)", marginBottom: 16 }} />
-            ) : (
-              <div className="image-placeholder">{getMemoryTypeIcon(memory.type, 48)}</div>
-            )}
-            {memory.content && (
-              isEditing ? (
-                <div>
-                  <textarea
-                    ref={contentInputRef}
-                    className="memory-body-input"
-                    value={editContent}
-                    onChange={handleContentChange}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") {
-                        cancelEditing();
-                      }
-                    }}
-                    autoFocus
-                  />
-                  {autoSaveStatus && (
-                    <span style={{ fontSize: 12, color: autoSaveStatus === "Saved" ? "#10B981" : autoSaveStatus === "Failed to save" ? "#EF4444" : "var(--text-tertiary)", marginTop: 4, display: "inline-block" }}>
-                      {autoSaveStatus}
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <p className="memory-view-content" onClick={startEditing} style={{ cursor: "pointer" }} title="Click to edit">
-                  {memory.content}
-                </p>
-              )
-            )}
-          </div>
-        )}
-
+        {/* Media Container: Video */}
         {memory.type === "video" && (
-          <div>
-            {(memory.mediaUrl || memory.mediaData) ? (
-              <video controls src={getMediaUrl(memory.mediaUrl || memory.mediaData)} style={{ width: "100%", maxHeight: 400, borderRadius: "var(--radius)", marginBottom: 16 }} />
+          <div className="memory-media-container" style={{ marginBottom: 20 }}>
+            {(memory.mediaUrl || memory.mediaData || memory.videoUrl) ? (
+              <video
+                controls
+                src={getMediaUrl(memory.mediaUrl || memory.mediaData || memory.videoUrl)}
+                style={{
+                  width: "100%",
+                  maxHeight: 450,
+                  borderRadius: "16px",
+                  backgroundColor: "#020617",
+                  border: "1px solid var(--border-color)",
+                }}
+              />
             ) : (
-              <div className="image-placeholder" style={{ background: "#1e293b" }}>{getMemoryTypeIcon(memory.type, 48)}</div>
-            )}
-            {memory.content && (
-              isEditing ? (
-                <div>
-                  <textarea
-                    ref={contentInputRef}
-                    className="memory-body-input"
-                    value={editContent}
-                    onChange={handleContentChange}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") {
-                        cancelEditing();
-                      }
-                    }}
-                    autoFocus
-                  />
-                  {autoSaveStatus && (
-                    <span style={{ fontSize: 12, color: autoSaveStatus === "Saved" ? "#10B981" : autoSaveStatus === "Failed to save" ? "#EF4444" : "var(--text-tertiary)", marginTop: 4, display: "inline-block" }}>
-                      {autoSaveStatus}
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <p className="memory-view-content" onClick={startEditing} style={{ cursor: "pointer" }} title="Click to edit">
-                  {memory.content}
-                </p>
-              )
+              <div className="image-placeholder" style={{ background: "#1e293b" }}>{getMemoryTypeIcon("video", 48)}</div>
             )}
           </div>
         )}
 
-        {memory.type === "checklist" && memory.checklist && (
-          <div style={{ marginBottom: 24 }}>
+        {/* Media Container: Checklist */}
+        {memory.type === "checklist" && (
+          <div style={{ marginBottom: 20 }}>
             <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 12 }}>
-              {memory.checklist.filter((c) => c.done).length}/{memory.checklist.length} completed
+              {editChecklist.filter((c) => c.done).length}/{editChecklist.length} completed
             </p>
-            {memory.checklist.map((item) => (
-              <div key={item.id} className="checklist-item">
-                <div className={`checklist-checkbox ${item.done ? "checked" : ""}`}>
-                  {item.done && <span style={{ fontSize: 12 }}>&#x2713;</span>}
+            {editChecklist.map((item) => (
+              <div key={item.id} className="checklist-item" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0" }}>
+                <div
+                  className={`checklist-checkbox ${item.done ? "checked" : ""}`}
+                  onClick={() => toggleChecklistItem(item.id)}
+                >
+                  {item.done && <Check size={12} />}
                 </div>
                 <span
                   style={{
+                    flex: 1,
                     fontSize: 14,
                     color: item.done ? "var(--text-tertiary)" : "var(--text-primary)",
                     textDecoration: item.done ? "line-through" : "none",
@@ -732,38 +517,129 @@ export default function MemoryViewPage() {
                 >
                   {item.text}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => removeChecklistItem(item.id)}
+                  style={{ background: "none", border: "none", color: "var(--text-tertiary)", cursor: "pointer" }}
+                  title="Remove item"
+                >
+                  <X size={14} />
+                </button>
               </div>
             ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <input
+                type="text"
+                className="checklist-item-input"
+                placeholder="+ Add checklist item..."
+                value={newChecklistText}
+                onChange={(e) => setNewChecklistText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addChecklistItem();
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  background: "var(--card-bg)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "var(--radius-sm)",
+                  padding: "8px 12px",
+                }}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={addChecklistItem}
+              >
+                Add
+              </button>
+            </div>
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
-          {memory.relatedPerson && (
-            <span className="tag" style={{ cursor: "pointer" }} onClick={() => {
-              const person = state.people.find((p) => p.name === memory.relatedPerson);
-              if (person) navigate(`/people/${person.id}`);
-            }}>
-              <User size={12} strokeWidth={1.5} style={{ marginRight: 4 }} />{memory.relatedPerson}
-            </span>
-          )}
+        {/* Universal Content / Notes Area for ALL memory types */}
+        <div className="memory-notes-section" style={{ marginBottom: 24 }}>
+          <textarea
+            ref={contentInputRef}
+            className="memory-body-input"
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            placeholder="Add notes, context, or thoughts about this memory..."
+            rows={4}
+          />
         </div>
 
-        {relatedMemories.length > 0 && (
-          <div className="related-memories-section">
-            <p className="related-title">Related Memories</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {relatedMemories.map((m) => (
-                <div key={m.id} className="card card-interactive" onClick={() => navigate(`/memory/${m.id}`)}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ display: "flex" }}>{getMemoryTypeIcon(m.type, 16)}</span>
-                    <div>
-                      <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{m.title}</p>
-                      <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{truncate(m.content, 60)}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+        {/* Tags Section */}
+        <div className="memory-tags-section" style={{ marginTop: 24, borderTop: "1px solid var(--border-light)", paddingTop: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {editTags.map((tag) => (
+              <span
+                key={tag}
+                className="tag"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "4px 10px",
+                  borderRadius: "9999px",
+                  fontSize: 12,
+                }}
+              >
+                <span>#{tag}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveTag(tag)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    color: "inherit",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                  title={`Remove #${tag}`}
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+            <input
+              type="text"
+              placeholder="+ Add tag..."
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={handleAddTag}
+              style={{
+                border: "1px dashed var(--border-color)",
+                background: "transparent",
+                borderRadius: "9999px",
+                padding: "4px 12px",
+                fontSize: 12,
+                color: "var(--text-secondary)",
+                outline: "none",
+                width: 110,
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Related Person Mention */}
+        {memory.relatedPerson && (
+          <div style={{ marginTop: 16 }}>
+            <span
+              className="tag"
+              style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+              onClick={() => {
+                const person = state.people.find((p) => p.name === memory.relatedPerson);
+                if (person) navigate(`/people/${person.id}`);
+              }}
+            >
+              <User size={12} strokeWidth={1.5} />
+              <span>{memory.relatedPerson}</span>
+            </span>
           </div>
         )}
       </div>

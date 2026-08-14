@@ -1,25 +1,13 @@
-import React, { useState, useRef, useEffect } from "react";
+import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
 import { getInitials } from "../../utils/helpers";
-import { Search, Users, Calendar, Layout, MoreHorizontal, Lock, Trash2, LogOut, Brain } from "lucide-react";
+import { Search, Users, Calendar, Layout, Brain } from "lucide-react";
 
 export default function TopNav() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { state, dispatch, handleLogout } = useApp();
-  const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef(null);
-
-  useEffect(() => {
-    const handleClick = (e) => {
-      if (moreRef.current && !moreRef.current.contains(e.target)) {
-        setMoreOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
+  const { state } = useApp();
 
   const isActive = (path) => location.pathname === path;
 
@@ -88,46 +76,6 @@ export default function TopNav() {
           <span>Timeline</span>
         </button>
 
-        <div className="dropdown" ref={moreRef}>
-          <button
-            className="nav-icon-btn"
-            onClick={() => setMoreOpen(!moreOpen)}
-            title="More"
-          >
-            <MoreHorizontal size={18} strokeWidth={1.5} />
-          </button>
-          {moreOpen && (
-            <div className="dropdown-menu" style={{ right: 0 }}>
-              <button
-                className="dropdown-item"
-                onClick={() => { navigate("/vault"); setMoreOpen(false); }}
-              >
-                <Lock size={16} strokeWidth={1.5} />
-                Private Vault
-              </button>
-              <button
-                className="dropdown-item"
-                onClick={() => { navigate("/deleted"); setMoreOpen(false); }}
-              >
-                <Trash2 size={16} strokeWidth={1.5} />
-                Recently Deleted
-              </button>
-              <div className="dropdown-divider" />
-              <button
-                className="dropdown-item"
-                onClick={() => {
-                  handleLogout();
-                  navigate("/");
-                  setMoreOpen(false);
-                }}
-              >
-                <LogOut size={16} strokeWidth={1.5} />
-                Sign Out
-              </button>
-            </div>
-          )}
-        </div>
-
         <button
           className="nav-avatar"
           onClick={() => navigate("/profile")}
@@ -136,7 +84,7 @@ export default function TopNav() {
           {state.user?.avatar ? (
             <img src={state.user.avatar} alt={state.user?.name || "User"} />
           ) : (
-            getInitials(state.user?.name || "U")
+            getInitials(state.user?.name || "M")
           )}
         </button>
       </div>

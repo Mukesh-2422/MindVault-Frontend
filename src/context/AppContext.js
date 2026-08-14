@@ -17,9 +17,10 @@ const initialState = {
   user: null,
   vaultLocked: true,
   vaultPasswordSet: false,
-  isAuthenticated: false,
+  isAuthenticated: !!getToken(),
   searchQuery: "",
-  loading: false,
+  loading: !!getToken(),
+  dataLoaded: false,
   error: null,
 };
 
@@ -44,12 +45,17 @@ function appReducer(state, action) {
         ...initialState,
         theme: state.theme,
         language: state.language,
+        isAuthenticated: false,
+        loading: false,
+        dataLoaded: false,
       };
     case "SET_DATA":
       return {
         ...state,
         memories: action.payload.memories,
         people: action.payload.people,
+        dataLoaded: true,
+        loading: false,
       };
     case "SET_MEMORIES":
       return { ...state, memories: action.payload };
