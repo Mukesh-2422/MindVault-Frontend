@@ -8,10 +8,22 @@ import { getToken } from "../api/client";
 
 const AppContext = createContext();
 
+const CHAT_SESSION_STORAGE_KEY = "mindvault_messages";
+const CHAT_SESSION_ALT_KEY = "mindvault_chat_session";
+
+// Clear any stale chat on initial script execution / hard reload
+try {
+  if (typeof window !== "undefined") {
+    sessionStorage.removeItem(CHAT_SESSION_STORAGE_KEY);
+    sessionStorage.removeItem(CHAT_SESSION_ALT_KEY);
+  }
+} catch {}
+
 const initialState = {
   memories: [],
   people: [],
   memorySearchResults: [],
+  chatMessages: [], // Starts clean on page refresh
   theme: "light",
   language: "en",
   user: null,
@@ -26,6 +38,15 @@ const initialState = {
 
 function appReducer(state, action) {
   switch (action.type) {
+    case "SET_CHAT_MESSAGES": {
+      return { ...state, chatMessages: action.payload || [] };
+    }
+    case "ADD_CHAT_MESSAGE": {
+      return { ...state, chatMessages: [...(state.chatMessages || []), action.payload] };
+    }
+    case "CLEAR_CHAT_MESSAGES": {
+      return { ...state, chatMessages: [] };
+    }
     case "SET_THEME":
       return { ...state, theme: action.payload };
     case "SET_LANGUAGE":
@@ -41,8 +62,12 @@ function appReducer(state, action) {
         user: action.payload.user,
       };
     case "LOGOUT":
+      try {
+        sessionStorage.removeItem(CHAT_SESSION_STORAGE_KEY);
+      } catch {}
       return {
         ...initialState,
+        chatMessages: [],
         theme: state.theme,
         language: state.language,
         isAuthenticated: false,

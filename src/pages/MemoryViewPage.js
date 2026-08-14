@@ -571,60 +571,7 @@ export default function MemoryViewPage() {
           />
         </div>
 
-        {/* Tags Section */}
-        <div className="memory-tags-section" style={{ marginTop: 24, borderTop: "1px solid var(--border-light)", paddingTop: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            {editTags.map((tag) => (
-              <span
-                key={tag}
-                className="tag"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                  padding: "4px 10px",
-                  borderRadius: "9999px",
-                  fontSize: 12,
-                }}
-              >
-                <span>#{tag}</span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveTag(tag)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
-                    color: "inherit",
-                    display: "flex",
-                    alignItems: "center",
-                  }}
-                  title={`Remove #${tag}`}
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            ))}
-            <input
-              type="text"
-              placeholder="+ Add tag..."
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={handleAddTag}
-              style={{
-                border: "1px dashed var(--border-color)",
-                background: "transparent",
-                borderRadius: "9999px",
-                padding: "4px 12px",
-                fontSize: 12,
-                color: "var(--text-secondary)",
-                outline: "none",
-                width: 110,
-              }}
-            />
-          </div>
-        </div>
+
 
         {/* Related Person Mention */}
         {memory.relatedPerson && (

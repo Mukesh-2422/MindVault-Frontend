@@ -7,7 +7,8 @@ import { formatTime } from "../utils/helpers";
 import { getOnThisDay } from "../data/dummyData";
 import {
   Brain, Mic, Send, Search, Play, Pause, FileText, Image as ImageIcon,
-  Video as VideoIcon, CheckSquare, Sparkles, ArrowDown, Plus, ArrowUpRight, X
+  Video as VideoIcon, CheckSquare, Sparkles, ArrowDown, Plus, ArrowUpRight, X,
+  Paperclip, ChevronDown, Link2
 } from "lucide-react";
 import { getMediaUrl } from "../api/voice";
 import "../styles/global.css";
@@ -58,7 +59,30 @@ function getResolvedMemoryType(memory) {
     return "checklist";
   }
 
+  // 5. Link
+  if (explicitType === "link" || memory.url || (memory.content && /^https?:\/\//i.test(memory.content.trim()))) {
+    return "link";
+  }
+
   return explicitType || "text";
+}
+
+function getMemoryTypeIconHelper(type, memory) {
+  const resolved = getResolvedMemoryType({ ...memory, type });
+  switch (resolved) {
+    case "image":
+      return <ImageIcon size={14} className="source-pill-icon text-slate-500" />;
+    case "voice":
+      return <Mic size={14} className="source-pill-icon text-slate-500" />;
+    case "video":
+      return <VideoIcon size={14} className="source-pill-icon text-slate-500" />;
+    case "link":
+      return <Link2 size={14} className="source-pill-icon text-slate-500" />;
+    case "checklist":
+      return <CheckSquare size={14} className="source-pill-icon text-slate-500" />;
+    default:
+      return <FileText size={14} className="source-pill-icon text-slate-500" />;
+  }
 }
 
 function InlineVoicePlayer({ memory, onNavigate }) {
@@ -319,12 +343,73 @@ function InlineMemoryRenderer({ memory, onNavigate }) {
   return <InlineTextCard memory={memory} onNavigate={onNavigate} />;
 }
 
+function ChatSourcePillsGroup({ memories, allMemories, onNavigate }) {
+  const [selectedId, setSelectedId] = useState(null);
+
+  if (!memories || memories.length === 0) return null;
+
+  const handlePillClick = (memId) => {
+    setSelectedId((prev) => (prev === memId ? null : memId));
+  };
+
+  const fullSelectedMemory = selectedId
+    ? allMemories.find((m) => m.id === selectedId) || memories.find((m) => m.id === selectedId)
+    : null;
+
+  return (
+    <div className="chat-sources-container">
+      <div className="chat-sources-heading">SELECT A MEMORY</div>
+      <div className="chat-sources-pills-row">
+        {memories.map((mem) => {
+          const fullMem = allMemories.find((m) => m.id === mem.id) || mem;
+          const isSelected = selectedId === mem.id;
+          return (
+            <button
+              key={mem.id}
+              type="button"
+              className={`chat-source-universal-pill ${isSelected ? "selected" : ""}`}
+              onClick={() => handlePillClick(mem.id)}
+              aria-expanded={isSelected}
+              title={`View ${fullMem.title || "memory"}`}
+            >
+              {getMemoryTypeIconHelper(fullMem.type, fullMem)}
+              <span className="source-pill-title">{fullMem.title || "Untitled"}</span>
+              <ChevronDown size={13} className={`source-pill-chevron ${isSelected ? "rotated" : ""}`} />
+            </button>
+          );
+        })}
+      </div>
+
+      {fullSelectedMemory && (
+        <div className="chat-source-selected-preview">
+          <InlineMemoryRenderer memory={fullSelectedMemory} onNavigate={onNavigate} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function HomePage() {
   const navigate = useNavigate();
   const { state, processChat, selectMemoryContext, dispatch } = useApp();
   const [loading, setLoading] = useState(!state.dataLoaded && state.loading);
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState([]);
+  
+  const messages = state.chatMessages || [];
+  const setMessages = useCallback((updaterOrArray) => {
+    if (typeof updaterOrArray === "function") {
+      dispatch({
+        type: "SET_CHAT_MESSAGES",
+        payload: updaterOrArray(state.chatMessages || []),
+      });
+    } else {
+      dispatch({
+        type: "SET_CHAT_MESSAGES",
+        payload: updaterOrArray,
+      });
+    }
+  }, [dispatch, state.chatMessages]);
+
   const [isTyping, setIsTyping] = useState(false);
   const [listening, setListening] = useState(false);
   const [attachedFile, setAttachedFile] = useState(null);
@@ -527,19 +612,32 @@ export default function HomePage() {
     setMemorySearchResults([]);
 
     const userMsg = {
-      id: `local_${Date.now()}`,
+      id: `user_${Date.now()}`,
       role: "user",
       content: promptText,
       attachment: currentAttachment,
       timestamp: new Date().toISOString(),
     };
-    setMessages((prev) => [...prev, userMsg]);
+
+    // Immediately dispatch and persist user message
+    dispatch({ type: "ADD_CHAT_MESSAGE", payload: userMsg });
     setIsTyping(true);
 
     try {
-      const result = await processChat(promptText, selectedMemory, messages, currentAttachment);
+      const historyWithUser = [...(state.chatMessages || []), userMsg];
+      const result = await processChat(promptText, selectedMemory, historyWithUser, currentAttachment);
       if (result?.assistant) {
-        setMessages((prev) => [...prev, result.assistant]);
+        const assistantMsg = {
+          id: result.assistant.id || `assistant_${Date.now()}`,
+          role: "assistant",
+          content: result.assistant.content,
+          memorySource: result.assistant.memorySource || result.assistant.selectedMemory || result.assistant.relatedMemories,
+          selectedMemory: result.assistant.selectedMemory,
+          relatedMemories: result.assistant.relatedMemories,
+          requiresSelection: result.assistant.requiresSelection,
+          timestamp: result.assistant.timestamp || new Date().toISOString(),
+        };
+        dispatch({ type: "ADD_CHAT_MESSAGE", payload: assistantMsg });
       } else if (result?.error) {
         setChatError(result.error);
       }
@@ -558,13 +656,23 @@ export default function HomePage() {
     setIsTyping(true);
 
     // Find the latest user query to ground the selection response
-    const lastUserMsg = messages.slice().reverse().find((m) => m.role === "user");
+    const lastUserMsg = (state.chatMessages || []).slice().reverse().find((m) => m.role === "user");
     const userQuery = lastUserMsg?.content || "";
 
     try {
       const result = await selectMemoryContext(memoryId, userQuery);
       if (result?.assistant) {
-        setMessages((prev) => [...prev, result.assistant]);
+        const assistantMsg = {
+          id: result.assistant.id || `assistant_${Date.now()}`,
+          role: "assistant",
+          content: result.assistant.content,
+          memorySource: result.assistant.memorySource || result.assistant.selectedMemory || result.assistant.relatedMemories,
+          selectedMemory: result.assistant.selectedMemory,
+          relatedMemories: result.assistant.relatedMemories,
+          requiresSelection: result.assistant.requiresSelection,
+          timestamp: result.assistant.timestamp || new Date().toISOString(),
+        };
+        dispatch({ type: "ADD_CHAT_MESSAGE", payload: assistantMsg });
       } else if (result?.error) {
         setChatError(result.error);
       }
@@ -677,18 +785,18 @@ export default function HomePage() {
                         {m.content ? m.content.substring(0, 100) + (m.content.length > 100 ? "..." : "") : "No content"}
                       </div>
                     </div>
-
-                    {m.type === "voice" && (m.mediaUrl || m.mediaData) && (
-                      <audio
-                        ref={(el) => {
-                          if (el) audioRefs.current[m.id] = el;
-                        }}
-                        src={getMediaUrl(m.mediaUrl || m.mediaData)}
-                        onEnded={() => handleAudioEnded(m.id)}
-                        style={{ display: "none" }}
-                      />
-                    )}
                   </div>
+
+                  {m.type === "voice" && (m.mediaUrl || m.mediaData) && (
+                    <audio
+                      ref={(el) => {
+                        if (el) audioRefs.current[m.id] = el;
+                      }}
+                      src={getMediaUrl(m.mediaUrl || m.mediaData)}
+                      onEnded={() => handleAudioEnded(m.id)}
+                      style={{ display: "none" }}
+                    />
+                  )}
                 </div>
               ))}
             </div>
@@ -838,6 +946,11 @@ export default function HomePage() {
                 const referencedMemId = msg.selectedMemory?.id || (msg.relatedMemories?.length === 1 ? msg.relatedMemories[0].id : null);
                 const matchedMem = referencedMemId ? state.memories.find((m) => m.id === referencedMemId) : null;
 
+                // Collect sources to display as universal pills
+                const displaySources = msg.relatedMemories && msg.relatedMemories.length > 0
+                  ? msg.relatedMemories
+                  : (msg.selectedMemory || matchedMem ? [msg.selectedMemory || matchedMem] : []);
+
                 return (
                   <div key={msg.id} className={`chat-message ${msg.role}`}>
                     <div className="chat-avatar">
@@ -865,52 +978,15 @@ export default function HomePage() {
                         {msg.content}
                       </div>
 
-                      {/* Render Type-Based Inline Memory Card (Voice / Image / Note) */}
-                      {matchedMem && (
-                        <InlineMemoryRenderer
-                          memory={matchedMem}
+                      {/* Render Universal SELECT A MEMORY Pills & Dynamic Previews */}
+                      {msg.role === "assistant" && displaySources.length > 0 && (
+                        <ChatSourcePillsGroup
+                          memories={displaySources}
+                          allMemories={state.memories}
                           onNavigate={navigate}
                         />
                       )}
 
-                      {/* If no single matched memory but multiple sources require selection */}
-                      {!matchedMem && !msg.selectedMemory && msg.relatedMemories && msg.relatedMemories.length > 0 && (
-                        msg.requiresSelection ? (
-                          <div className="chat-sources">
-                            <div className="chat-sources-label">Select a memory</div>
-                            <div className="chat-sources-list">
-                              {msg.relatedMemories.map((mem) => (
-                                <button
-                                  key={mem.id}
-                                  className={`chat-source-card ${selectedMemory === mem.id ? "selected" : ""}`}
-                                  onClick={() => handleSelectMemory(mem.id)}
-                                  title={mem.title}
-                                  aria-label={`Choose memory: ${mem.title}`}
-                                >
-                                  {mem.title}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="chat-sources">
-                            <div className="chat-sources-label">Sources</div>
-                            <div className="chat-sources-list">
-                              {msg.relatedMemories.map((mem) => (
-                                <button
-                                  key={mem.id}
-                                  className={`chat-source-card ${selectedMemory === mem.id ? "selected" : ""}`}
-                                  onClick={() => handleSelectMemory(mem.id)}
-                                  title={mem.title}
-                                  aria-label={`Use memory: ${mem.title}`}
-                                >
-                                  {mem.title}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )
-                      )}
                       <div className="chat-time">{formatTime(msg.timestamp)}</div>
                     </div>
                   </div>
