@@ -15,3 +15,7 @@ export async function createPerson(data) {
 export async function updatePerson(id, data) {
   return api.put(`/people/${id}`, data);
 }
+
+export async function deletePerson(id) {
+  return api.delete(`/people/${id}`);
+}

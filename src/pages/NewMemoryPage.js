@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
-import { formatFullDate, formatTime } from "../utils/helpers";
+import { formatFullDate, formatTime, formatMemoryDateTime } from "../utils/helpers";
 import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import { createMemory, updateMemory } from "../api/memories";
 import { uploadFile } from "../api/client";
@@ -382,8 +382,22 @@ export default function NewMemoryPage() {
           />
         </div>
 
-        <div className="memory-editor-date">
-          {formatFullDate(now.toISOString())} at {formatTime(now.toISOString())}
+        <div
+          className="memory-editor-meta-row"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            fontSize: "13px",
+            color: "var(--text-tertiary, #94a3b8)",
+            marginBottom: "24px",
+            marginTop: "4px",
+            fontWeight: 400,
+          }}
+        >
+          <span>{formatMemoryDateTime(now.toISOString())}</span>
+          <span style={{ opacity: 0.5 }}>|</span>
+          <span>{content ? content.length : 0} {content?.length === 1 ? "character" : "characters"}</span>
         </div>
 
         {type === "text" && (

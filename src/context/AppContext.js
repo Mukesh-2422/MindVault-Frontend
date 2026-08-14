@@ -134,6 +134,11 @@ function appReducer(state, action) {
           p.id === action.payload.id ? action.payload : p
         ),
       };
+    case "DELETE_PERSON":
+      return {
+        ...state,
+        people: state.people.filter((p) => p.id !== action.payload),
+      };
     case "UNLOCK_VAULT":
       return { ...state, vaultLocked: false };
     case "LOCK_VAULT":

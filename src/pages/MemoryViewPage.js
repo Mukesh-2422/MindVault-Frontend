@@ -4,7 +4,7 @@ import { useApp } from "../context/AppContext";
 import { togglePinMemory, deleteMemory, updateMemory, getMemory, moveMemoryToVault } from "../api/memories";
 import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import {
-  formatFullDate, formatTime, getMemoryTypeIcon, truncate,
+  formatFullDate, formatTime, formatMemoryDateTime, getMemoryTypeIcon, truncate,
 } from "../utils/helpers";
 import {
   ArrowLeft, Pin, MoreHorizontal, Download, Lock, Trash2, Play, Pause, Folder, User, Search,
@@ -399,8 +399,27 @@ export default function MemoryViewPage() {
           value={editTitle}
           onChange={(e) => setEditTitle(e.target.value)}
           placeholder="Untitled Memory"
-          style={{ marginBottom: 16 }}
+          style={{ width: "100%" }}
         />
+
+        {/* Date, Time & Character Count Meta Row */}
+        <div
+          className="memory-editor-meta-row"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            fontSize: "13px",
+            color: "var(--text-tertiary, #94a3b8)",
+            marginBottom: "24px",
+            marginTop: "2px",
+            fontWeight: 400,
+          }}
+        >
+          <span>{formatMemoryDateTime(memory.date || memory.createdAt)}</span>
+          <span style={{ opacity: 0.5 }}>|</span>
+          <span>{editContent ? editContent.length : 0} {editContent?.length === 1 ? "character" : "characters"}</span>
+        </div>
 
         {/* Media Container: Image */}
         {memory.type === "image" && (

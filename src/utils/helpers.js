@@ -32,6 +32,23 @@ export const formatTime = (dateStr) => {
   });
 };
 
+export const formatMemoryDateTime = (dateStr) => {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    const day = d.getDate();
+    const month = d.toLocaleString("en-US", { month: "long" });
+    const hours = d.getHours();
+    const mins = d.getMinutes().toString().padStart(2, "0");
+    const ampm = hours >= 12 ? "PM" : "AM";
+    const formattedHours = hours % 12 || 12;
+    return `${day} ${month} ${formattedHours}:${mins} ${ampm}`;
+  } catch {
+    return "";
+  }
+};
+
 export const getMemoryTypeIcon = (type, size = 16) => {
   const props = { size, strokeWidth: 1.5 };
   switch (type) {
