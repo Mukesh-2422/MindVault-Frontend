@@ -1,7 +1,7 @@
 import { api } from "./client";
 
-export async function sendMessage(content, selectedMemoryId = null, conversation = null) {
-  return api.post("/chat", { content, selectedMemoryId, conversation });
+export async function sendMessage(content, selectedMemoryId = null, conversation = null, attachment = null) {
+  return api.post("/chat", { content, selectedMemoryId, conversation, attachment });
 }
 
 /**

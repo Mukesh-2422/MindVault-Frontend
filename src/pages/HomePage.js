@@ -537,7 +537,7 @@ export default function HomePage() {
     setIsTyping(true);
 
     try {
-      const result = await processChat(promptText, selectedMemory, messages);
+      const result = await processChat(promptText, selectedMemory, messages, currentAttachment);
       if (result?.assistant) {
         setMessages((prev) => [...prev, result.assistant]);
       } else if (result?.error) {

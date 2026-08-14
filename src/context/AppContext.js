@@ -219,9 +219,9 @@ export function AppProvider({ children }) {
     }
   }, [state.isAuthenticated, loadData]);
 
-  const processChat = useCallback(async (userMessage, selectedMemoryId = null, conversation = null) => {
+  const processChat = useCallback(async (userMessage, selectedMemoryId = null, conversation = null, attachment = null) => {
     try {
-      const result = await chatApi.sendMessage(userMessage, selectedMemoryId, conversation);
+      const result = await chatApi.sendMessage(userMessage, selectedMemoryId, conversation, attachment);
       // Refresh memories in background in case new links were formed
       memoriesApi.getMemories().then((memories) => {
         dispatch({ type: "SET_MEMORIES", payload: memories });
