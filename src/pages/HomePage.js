@@ -17,39 +17,26 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { state, processChat, selectMemoryContext, dispatch } = useApp();
   const [input, setInput] = useState("");
+  const [messages, setMessages] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
   const [listening, setListening] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const recognitionRef = useRef(null);
   const isSubmittingRef = useRef(false);
-  // Use state.currentChat from context instead of local state
-  // const [localChat, setLocalChat] = useState([]);
   const [chatError, setChatError] = useState(null);
   const [memorySearchResults, setMemorySearchResults] = useState([]);
   const [isSearchingMemories, setIsSearchingMemories] = useState(false);
   const [playingAudioId, setPlayingAudioId] = useState(null);
   const [selectedMemory, setSelectedMemory] = useState(null);
   const audioRefs = useRef({});
-  const prevAuthRef = useRef(state.isAuthenticated);
 
-  useEffect(() => {
-    const wasAuthenticated = prevAuthRef.current;
-    const isAuthenticated = state.isAuthenticated;
-    // Clear current chat when auth state changes (login/logout)
-    if (wasAuthenticated !== isAuthenticated) {
-      dispatch({ type: "CLEAR_CURRENT_CHAT" });
-      setMemorySearchResults([]);
-    }
-    prevAuthRef.current = isAuthenticated;
-  }, [state.isAuthenticated, dispatch]);
-
-  // Keep the Home chat positioned at the latest message (not the first).
+  // Auto-scroll to latest message
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [state.currentChat, isTyping]);
+  }, [messages, isTyping]);
 
   const onThisDay = getOnThisDay(state.memories);
 
@@ -99,11 +86,6 @@ export default function HomePage() {
   const handleAudioEnded = (memoryId) => {
     setPlayingAudioId(null);
   };
-
-  // NOTE: Do NOT load chatHistory into Home chat.
-  // Home page shows ONLY the current active chat session.
-  // Chat History is accessed separately via /chat-history route.
-
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -166,7 +148,6 @@ export default function HomePage() {
 
   const handleSendWithText = async (text) => {
     if (!text.trim()) return;
-    // Guard against duplicate submissions from voice/text paths.
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
     setInput("");
@@ -179,20 +160,13 @@ export default function HomePage() {
       content: text.trim(),
       timestamp: new Date().toISOString(),
     };
-    dispatch({ type: "ADD_CURRENT_CHAT_MESSAGE", payload: userMsg });
+    setMessages((prev) => [...prev, userMsg]);
     setIsTyping(true);
-    const requestId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
     try {
-      const result = await processChat(text, selectedMemory, state.activeConversationId, requestId);
-      if (result?.conversationId) {
-        dispatch({ type: "SET_ACTIVE_CONVERSATION_ID", payload: result.conversationId });
-      }
-      if (result?.user) {
-        // Replace the temporary local message with the backend message
-        dispatch({ type: "REPLACE_CURRENT_CHAT_MESSAGE", payload: { localId: userMsg.id, message: result.user } });
-      }
+      const result = await processChat(text.trim(), selectedMemory, messages);
       if (result?.assistant) {
-        dispatch({ type: "ADD_CURRENT_CHAT_MESSAGE", payload: result.assistant });
+        setMessages((prev) => [...prev, result.assistant]);
       } else if (result?.error) {
         setChatError(result.error);
       }
@@ -216,14 +190,13 @@ export default function HomePage() {
       content: text.trim(),
       timestamp: new Date().toISOString(),
     };
-    dispatch({ type: "ADD_CURRENT_CHAT_MESSAGE", payload: userMsg });
+    setMessages((prev) => [...prev, userMsg]);
     searchMemories(text.trim());
   };
 
   const handleSend = async () => {
     const msg = input.trim();
     if (!msg) return;
-    // Guard against duplicate submissions (e.g. rapid Enter presses).
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
     setInput("");
@@ -236,20 +209,13 @@ export default function HomePage() {
       content: msg,
       timestamp: new Date().toISOString(),
     };
-    const requestId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-    dispatch({ type: "ADD_CURRENT_CHAT_MESSAGE", payload: userMsg });
+    setMessages((prev) => [...prev, userMsg]);
     setIsTyping(true);
+
     try {
-      const result = await processChat(msg, selectedMemory, state.activeConversationId, requestId);
-      if (result?.conversationId) {
-        dispatch({ type: "SET_ACTIVE_CONVERSATION_ID", payload: result.conversationId });
-      }
-      if (result?.user) {
-        // Replace the temporary local message with the backend message
-        dispatch({ type: "REPLACE_CURRENT_CHAT_MESSAGE", payload: { localId: userMsg.id, message: result.user } });
-      }
+      const result = await processChat(msg, selectedMemory, messages);
       if (result?.assistant) {
-        dispatch({ type: "ADD_CURRENT_CHAT_MESSAGE", payload: result.assistant });
+        setMessages((prev) => [...prev, result.assistant]);
       } else if (result?.error) {
         setChatError(result.error);
       }
@@ -266,13 +232,15 @@ export default function HomePage() {
     isSubmittingRef.current = true;
     setMemorySearchResults([]);
     setIsTyping(true);
+
+    // Find the latest user query to ground the selection response
+    const lastUserMsg = messages.slice().reverse().find((m) => m.role === "user");
+    const userQuery = lastUserMsg?.content || "";
+
     try {
-      const result = await selectMemoryContext(memoryId, state.activeConversationId);
-      if (result?.conversationId) {
-        dispatch({ type: "SET_ACTIVE_CONVERSATION_ID", payload: result.conversationId });
-      }
+      const result = await selectMemoryContext(memoryId, userQuery);
       if (result?.assistant) {
-        dispatch({ type: "ADD_CURRENT_CHAT_MESSAGE", payload: result.assistant });
+        setMessages((prev) => [...prev, result.assistant]);
         setSelectedMemory(memoryId);
       } else if (result?.error) {
         setChatError(result.error);
@@ -396,10 +364,10 @@ export default function HomePage() {
         </div>
 
         {/* Chat Messages */}
-        {state.currentChat.length > 0 && (
+        {messages.length > 0 && (
           <div className="chat-container">
             <div className="chat-messages">
-              {state.currentChat.map((msg) => (
+              {messages.map((msg) => (
                 <div key={msg.id} className={`chat-message ${msg.role}`}>
                   <div className="chat-avatar">
                     {msg.role === "user" ? (
@@ -420,27 +388,46 @@ export default function HomePage() {
                           aria-label={`Open memory: ${msg.selectedMemory.title}`}
                           title={`Open memory: ${msg.selectedMemory.title}`}
                         >
-                          {msg.selectedMemory.title}
+                          View Memory: {msg.selectedMemory.title} →
                         </button>
                       </div>
                     )}
                     {!msg.selectedMemory && msg.relatedMemories && msg.relatedMemories.length > 0 && (
-                      <div className="chat-sources">
-                        <div className="chat-sources-label">Sources</div>
-                        <div className="chat-sources-list">
-                          {msg.relatedMemories.map((mem) => (
-                            <button
-                              key={mem.id}
-                              className={`chat-source-card ${selectedMemory === mem.id ? "selected" : ""}`}
-                              onClick={() => navigate(`/memory/${mem.id}`, { state: { from: "/home" } })}
-                              title={mem.title}
-                              aria-label={`Open memory: ${mem.title}`}
-                            >
-                              {mem.title}
-                            </button>
-                          ))}
+                      msg.requiresSelection ? (
+                        <div className="chat-sources">
+                          <div className="chat-sources-label">Select a memory</div>
+                          <div className="chat-sources-list">
+                            {msg.relatedMemories.map((mem) => (
+                              <button
+                                key={mem.id}
+                                className={`chat-source-card ${selectedMemory === mem.id ? "selected" : ""}`}
+                                onClick={() => handleSelectMemory(mem.id)}
+                                title={mem.title}
+                                aria-label={`Choose memory: ${mem.title}`}
+                              >
+                                {mem.title}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="chat-sources">
+                          <div className="chat-sources-label">Sources</div>
+                          <div className="chat-sources-list">
+                            {msg.relatedMemories.map((mem) => (
+                              <button
+                                key={mem.id}
+                                className={`chat-source-card ${selectedMemory === mem.id ? "selected" : ""}`}
+                                onClick={() => handleSelectMemory(mem.id)}
+                                title={mem.title}
+                                aria-label={`Use memory: ${mem.title}`}
+                              >
+                                {mem.title}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )
                     )}
                     <div className="chat-time">{formatTime(msg.timestamp)}</div>
                   </div>

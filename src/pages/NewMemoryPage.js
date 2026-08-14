@@ -7,9 +7,23 @@ import { createMemory, updateMemory } from "../api/memories";
 import { uploadFile } from "../api/client";
 import { uploadVoiceMemory } from "../api/voice";
 import {
-  ArrowLeft, MoreHorizontal, Pin, Save,
-  Plus, X, Check, Mic, Image, Video, CheckSquare, FileText,
-  Download, Trash2, Square, Upload, Lock,
+  Check,
+  Plus,
+  X,
+  Mic,
+  Image,
+  Video,
+  CheckSquare,
+  Download,
+  Trash2,
+  Square,
+  Upload,
+  Lock,
+  ArrowLeft,
+  MoreHorizontal,
+  Pin,
+  Save,
+  FileText,
 } from "lucide-react";
 import "../styles/global.css";
 import "../styles/pages.css";
@@ -60,16 +74,6 @@ export default function NewMemoryPage() {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (title || content) {
-        setDraftSaved(true);
-        setTimeout(() => setDraftSaved(false), 2000);
-      }
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [title, content]);
-
-  useEffect(() => {
     const handleClick = (e) => {
       if (moreRef.current && !moreRef.current.contains(e.target)) {
         setMoreOpen(false);
@@ -78,6 +82,16 @@ export default function NewMemoryPage() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (title || content) {
+        setDraftSaved(true);
+        setTimeout(() => setDraftSaved(false), 2000);
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [title, content]);
 
   useEffect(() => {
     return () => {

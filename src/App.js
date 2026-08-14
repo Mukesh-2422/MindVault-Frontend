@@ -25,8 +25,6 @@ import {
   SettingsSecurityPage,
   SettingsLanguagePage,
   SettingsAppearancePage,
-  ChatHistoryPage,
-    ConversationViewPage,
   VoiceMemoriesPage,
   VaultResetPage,
 } from "./pages";
@@ -208,22 +206,6 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/chat-history"
-        element={
-          <ProtectedRoute>
-            <ChatHistoryPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/chat-history/:conversationId"
-        element={
-          <ProtectedRoute>
-            <ConversationViewPage />
-          </ProtectedRoute>
-        }
-      />
-            <Route
         path="/voice-memories"
         element={
           <ProtectedRoute>

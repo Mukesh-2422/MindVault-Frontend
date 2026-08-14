@@ -1430,11 +1430,16 @@
 
 .editor-nav-btn.save-btn {
   background: var(--navy);
-  color: white;
+  color: #ffffff;
+  border-radius: var(--radius-full);
+  padding: 6px 16px;
+  font-weight: 500;
+  gap: 6px;
 }
 
 .editor-nav-btn.save-btn:hover {
   background: var(--navy-hover);
+  color: #ffffff;
   transform: translateY(-1px);
 }
 

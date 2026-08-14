@@ -11,9 +11,6 @@ const AppContext = createContext();
 const initialState = {
   memories: [],
   people: [],
-  chatHistory: [],
-  currentChat: [], // Active chat session on Home page
-  activeConversationId: null, // ID of conversation being viewed in chat history
   memorySearchResults: [],
   theme: "light",
   language: "en",
@@ -53,7 +50,6 @@ function appReducer(state, action) {
         ...state,
         memories: action.payload.memories,
         people: action.payload.people,
-        chatHistory: action.payload.chatHistory,
       };
     case "SET_MEMORIES":
       return { ...state, memories: action.payload };
@@ -96,25 +92,6 @@ function appReducer(state, action) {
           m.id === action.payload ? { ...m, pinned: !m.pinned } : m
         ),
       };
-    case "ADD_CHAT":
-      return { ...state, chatHistory: [...state.chatHistory, action.payload] };
-    case "SET_CHAT_HISTORY":
-      return { ...state, chatHistory: action.payload };
-    case "SET_CURRENT_CHAT":
-      return { ...state, currentChat: action.payload };
-    case "ADD_CURRENT_CHAT_MESSAGE":
-      return { ...state, currentChat: [...state.currentChat, action.payload] };
-    case "REPLACE_CURRENT_CHAT_MESSAGE":
-      return {
-        ...state,
-        currentChat: state.currentChat.map((msg) =>
-          msg.id === action.payload.localId ? action.payload.message : msg
-        ),
-      };
-    case "CLEAR_CURRENT_CHAT":
-      return { ...state, currentChat: [], activeConversationId: null };
-    case "SET_ACTIVE_CONVERSATION_ID":
-      return { ...state, activeConversationId: action.payload };
     case "SET_PEOPLE":
       return { ...state, people: action.payload };
     case "ADD_PERSON":
@@ -138,23 +115,6 @@ function appReducer(state, action) {
       };
     case "UPDATE_USER":
       return { ...state, user: { ...state.user, ...action.payload } };
-    case "ADD_CHAT_SESSION":
-      return {
-        ...state,
-        chatHistory: [action.payload, ...state.chatHistory],
-      };
-    case "TOGGLE_PIN_CHAT":
-      return {
-        ...state,
-        chatHistory: state.chatHistory.map((chat) =>
-          chat.id === action.payload ? { ...chat, pinned: !chat.pinned } : chat
-        ),
-      };
-    case "LOAD_CHAT_SESSION":
-      return {
-        ...state,
-                activeConversationId: action.payload,
-      };
     case "SET_MEMORY_SEARCH_RESULTS":
       return {
         ...state,
@@ -166,36 +126,66 @@ function appReducer(state, action) {
 }
 
 export function AppProvider({ children }) {
-  const [state, dispatch] = useReducer(appReducer, initialState, (init) => {
-    const savedTheme = localStorage.getItem("mv_theme");
-    const savedToken = getToken();
-    return {
-      ...init,
-      theme: savedTheme || "light",
-      isAuthenticated: !!savedToken,
-    };
-  });
+  const [state, dispatch] = useReducer(appReducer, initialState);
 
-  const applyTheme = useCallback((themeValue) => {
-    const resolved = themeValue === "system"
-      ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
-      : themeValue;
-    document.documentElement.setAttribute("data-theme", resolved);
+  // Initialize theme from localStorage
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("mv_theme") || "light";
+    const savedLanguage = localStorage.getItem("mv_language") || "en";
+    dispatch({ type: "SET_THEME", payload: savedTheme });
+    dispatch({ type: "SET_LANGUAGE", payload: savedLanguage });
+    document.documentElement.setAttribute("data-theme", savedTheme);
   }, []);
 
+  // Update theme attribute when state changes
   useEffect(() => {
+    document.documentElement.setAttribute("data-theme", state.theme);
     localStorage.setItem("mv_theme", state.theme);
-    applyTheme(state.theme);
-  }, [state.theme, applyTheme]);
+  }, [state.theme]);
 
-  // Listen for OS theme changes when in "system" mode
+  // Update language in localStorage
   useEffect(() => {
-    if (state.theme !== "system") return;
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => applyTheme("system");
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, [state.theme, applyTheme]);
+    localStorage.setItem("mv_language", state.language);
+  }, [state.language]);
+
+  // Check auth on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = getToken();
+      if (!token) return;
+
+      try {
+        const user = await authApi.getProfile();
+        dispatch({ type: "AUTH_SUCCESS", payload: { user } });
+      } catch (err) {
+        console.error("Auth check failed:", err);
+        authApi.logout();
+        dispatch({ type: "LOGOUT" });
+      }
+    };
+    checkAuth();
+  }, []);
+
+  // Check vault status
+  useEffect(() => {
+    if (state.isAuthenticated && getToken()) {
+      const checkVault = async () => {
+        try {
+          const status = await vaultApi.getVaultStatus();
+          dispatch({
+            type: "SET_VAULT_STATUS",
+            payload: {
+              locked: status.locked !== false,
+              passwordSet: status.passwordSet || false,
+            },
+          });
+        } catch {
+          // Vault endpoints might not be available or user not logged in
+        }
+      };
+      checkVault();
+    }
+  }, [state.isAuthenticated]);
 
   const loadData = useCallback(async () => {
     dispatch({ type: "SET_LOADING", payload: true });
@@ -204,14 +194,12 @@ export function AppProvider({ children }) {
         memoriesApi.getMemories(),
         peopleApi.getPeople(),
       ]);
-      dispatch({ type: "SET_DATA", payload: { memories, people, chatHistory: [] } });
+      dispatch({ type: "SET_DATA", payload: { memories, people } });
 
       try {
         const profile = await authApi.getProfile();
         dispatch({ type: "UPDATE_USER", payload: profile });
       } catch {}
-
-
     } catch (err) {
       dispatch({ type: "SET_ERROR", payload: err.message });
     } finally {
@@ -225,112 +213,28 @@ export function AppProvider({ children }) {
     }
   }, [state.isAuthenticated, loadData]);
 
-  const loadChatHistory = useCallback(async () => {
+  const processChat = useCallback(async (userMessage, selectedMemoryId = null, conversation = null) => {
     try {
-      const chatHistory = await chatApi.getChatHistory();
-      dispatch({ type: "SET_CHAT_HISTORY", payload: chatHistory });
-    } catch (err) {
-      console.error("Error loading chat history:", err);
-    }
-  }, [dispatch]);
-
-  // Persist the active Home-session conversation id so the latest conversation
-  // can be restored from the backend when returning to Home (source of truth).
-  const getPersistedActiveConv = () => {
-    try {
-      return localStorage.getItem("mv_active_conversation");
-    } catch {
-      return null;
-    }
-  };
-  const persistActiveConv = (id) => {
-    try {
-      if (id) localStorage.setItem("mv_active_conversation", id);
-      else localStorage.removeItem("mv_active_conversation");
-    } catch {
-      /* ignore storage errors */
-    }
-  };
-
-  // Set + persist the active Home-session conversation id.
-  const setActiveConversationId = useCallback(
-    (id) => {
-      persistActiveConv(id);
-      dispatch({ type: "SET_ACTIVE_CONVERSATION_ID", payload: id });
-    },
-    [dispatch]
-  );
-
-  // Restore the active Home conversation from the backend on return to Home.
-  const loadActiveConversation = useCallback(async () => {
-    const id = getPersistedActiveConv();
-    if (!id) return null;
-    try {
-      const conversation = await chatApi.getConversation(id);
-      const msgs = conversation.messages || [];
-      if (msgs.length > 0) {
-        dispatch({ type: "SET_CURRENT_CHAT", payload: msgs });
-        dispatch({ type: "SET_ACTIVE_CONVERSATION_ID", payload: conversation.id || id });
-        return conversation;
-      }
-    } catch (err) {
-      console.error("Error restoring active conversation:", err);
-    }
-    return null;
-  }, [dispatch]);
-
-  const deleteConversation = useCallback(async (conversationId) => {
-    try {
-      await chatApi.deleteConversation(conversationId);
-      // Reload chat history after deletion
-      const chatHistory = await chatApi.getChatHistory();
-      dispatch({ type: "SET_CHAT_HISTORY", payload: chatHistory });
-      return { success: true };
-    } catch (err) {
-      console.error("Error deleting conversation:", err);
-      return { error: err.message || "Failed to delete conversation" };
-    }
-  }, [dispatch]);
-
-  const processChat = useCallback(async (userMessage, selectedMemoryId = null, conversationId = null, requestId = null) => {
-    try {
-      const result = await chatApi.sendMessage(userMessage, selectedMemoryId, conversationId, requestId);
-      if (result?.conversationId) persistActiveConv(result.conversationId);
-      // Refresh the persisted chat history list from the backend so the
-      // summaries (title/latest preview/count) stay current. Home keeps its
-      // own active session in currentChat and is intentionally NOT overwritten.
-      try {
-        const list = await chatApi.getChatHistory();
-        dispatch({ type: "SET_CHAT_HISTORY", payload: list });
-      } catch (err) {
-        console.error("Failed to refresh chat history:", err);
-      }
-      // Refresh memories to pick up any new relations
-      const memories = await memoriesApi.getMemories();
-      dispatch({ type: "SET_MEMORIES", payload: memories });
+      const result = await chatApi.sendMessage(userMessage, selectedMemoryId, conversation);
+      // Refresh memories in background in case new links were formed
+      memoriesApi.getMemories().then((memories) => {
+        dispatch({ type: "SET_MEMORIES", payload: memories });
+      }).catch(() => {});
       return result;
     } catch (err) {
       console.error("Chat error:", err);
       return { error: err.message || "Something went wrong. Please try again." };
     }
-  }, [dispatch]);
+  }, []);
 
-  const selectMemoryContext = useCallback(async (memoryId, conversationId = null) => {
+  const selectMemoryContext = useCallback(async (memoryId, userQuery = "") => {
     try {
-      const result = await chatApi.selectMemoryContext(memoryId, conversationId);
-      if (result?.conversationId) persistActiveConv(result.conversationId);
-      try {
-        const list = await chatApi.getChatHistory();
-        dispatch({ type: "SET_CHAT_HISTORY", payload: list });
-      } catch (err) {
-        console.error("Failed to refresh chat history:", err);
-      }
-      return result;
+      return await chatApi.selectMemoryContext(memoryId, userQuery);
     } catch (err) {
       console.error("Memory selection error:", err);
       return { error: err.message || "Something went wrong." };
     }
-  }, [dispatch]);
+  }, []);
 
   const handleLogin = useCallback(async (email, password) => {
     const data = await authApi.login(email, password);
@@ -343,29 +247,12 @@ export function AppProvider({ children }) {
   }, []);
 
   const handleLogout = useCallback(async () => {
-    // Do NOT clear chat history from backend - just clear local state
     authApi.logout();
-    persistActiveConv(null);
-    dispatch({ type: "LOGOUT" });
-  }, [dispatch]);
-
-  const loadConversation = useCallback(async (conversationId) => {
     try {
-      dispatch({ type: "SET_LOADING", payload: true });
-      const conversation = await chatApi.getConversation(conversationId);
-      dispatch({ type: "SET_CURRENT_CHAT", payload: conversation.messages || [] });
-      const convId = conversation.id || conversationId;
-      dispatch({ type: "SET_ACTIVE_CONVERSATION_ID", payload: convId });
-      persistActiveConv(convId);
-    } catch (err) {
-      console.error("Error loading conversation:", err);
-      dispatch({ type: "SET_ERROR", payload: err.message || "Failed to load conversation" });
-      dispatch({ type: "SET_CURRENT_CHAT", payload: [] });
-      dispatch({ type: "SET_ACTIVE_CONVERSATION_ID", payload: null });
-    } finally {
-      dispatch({ type: "SET_LOADING", payload: false });
-    }
-  }, [dispatch]);
+      localStorage.removeItem("mv_active_conversation");
+    } catch {}
+    dispatch({ type: "LOGOUT" });
+  }, []);
 
   const value = {
     state,
@@ -373,11 +260,6 @@ export function AppProvider({ children }) {
     processChat,
     selectMemoryContext,
     loadData,
-    loadChatHistory,
-    loadConversation,
-    loadActiveConversation,
-    setActiveConversationId,
-    deleteConversation,
     handleLogin,
     handleRegister,
     handleLogout,

@@ -1,10 +1,10 @@
-﻿import React from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 import TopNav from "../components/layout/TopNav";
 import { useApp } from "../context/AppContext";
 import { useAppBackNavigation } from "../utils/useAppBackNavigation";
 import {
-  User, Lock, Globe, Sun, Trash2, MessageSquare, LogOut, ChevronRight,
+  User, Lock, Globe, Sun, Trash2, LogOut, ChevronRight,
   ArrowLeft,
 } from "lucide-react";
 import "../styles/global.css";
@@ -29,7 +29,6 @@ const SETTINGS_SECTIONS = [
     title: "DATA",
     items: [
       { label: "Recently Deleted", desc: "View and restore deleted memories", icon: Trash2, to: "/deleted" },
-      { label: "Chat History", desc: "Manage your previous conversations", icon: MessageSquare, to: "/chat-history" },
     ],
   },
 ];

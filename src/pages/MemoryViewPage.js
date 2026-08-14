@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import TopNav from "../components/layout/TopNav";
 import { useApp } from "../context/AppContext";
 import { togglePinMemory, deleteMemory, updateMemory, getMemory, moveMemoryToVault } from "../api/memories";
 import { useAppBackNavigation } from "../utils/useAppBackNavigation";
@@ -9,7 +8,7 @@ import {
 } from "../utils/helpers";
 import {
   ArrowLeft, Pin, MoreHorizontal, Download, Lock, Trash2, Play, Square, Folder, User, Search,
-  FileText, Copy, Image as ImageIcon, Mic, Video as VideoIcon, CheckSquare,
+  FileText, Copy, Image as ImageIcon, Mic, Video as VideoIcon, CheckSquare, Save,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { getMediaUrl } from "../api/voice";
@@ -48,10 +47,6 @@ export default function MemoryViewPage() {
     document.addEventListener("mousedown", handleClick);
     return () => {
       document.removeEventListener("mousedown", handleClick);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
     };
   }, []);
 
@@ -72,9 +67,19 @@ export default function MemoryViewPage() {
 
   if (!memory) {
     return (
-      <div className="app">
-        <TopNav />
-        <div className="main-content">
+      <div className="new-memory-page">
+        <nav className="memory-editor-nav">
+          <div className="editor-nav-left">
+            <button className="editor-nav-btn" onClick={goBack} aria-label="Go back">
+              <ArrowLeft size={16} strokeWidth={1.5} />
+            </button>
+          </div>
+          <div className="editor-nav-center">
+            <span style={{ display: "flex" }}><FileText size={20} strokeWidth={1.5} /></span>
+          </div>
+          <div className="editor-nav-right" />
+        </nav>
+        <div className="memory-editor-content">
           <div className="empty-state">
             <div className="empty-state-icon"><Search size={48} strokeWidth={1.5} /></div>
             <p className="empty-state-title">Memory not found</p>
@@ -400,72 +405,115 @@ export default function MemoryViewPage() {
   };
 
   return (
-    <div className="app">
-      <TopNav />
-      <div className="main-content memory-view-page">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 16, paddingBottom: 8 }}>
-          <button className="back-btn" onClick={goBack} aria-label="Go back">
+    <div className="new-memory-page">
+      <nav className="memory-editor-nav">
+        <div className="editor-nav-left">
+          <button className="editor-nav-btn" onClick={goBack} aria-label="Go back">
             <ArrowLeft size={16} strokeWidth={1.5} />
           </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <button className="editor-nav-btn" onClick={handlePin} style={{ color: memory.pinned ? "#EAB308" : "var(--text-secondary)", padding: "6px 10px", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
-              <Pin size={16} strokeWidth={1.5} />
-            </button>
-            {isEditing ? (
-              <>
-                <button className="editor-nav-btn" onClick={saveEdits} disabled={saving} style={{ padding: "6px 10px", borderRadius: "var(--radius-sm)", fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", cursor: "pointer" }}>
-                  {saving ? "Saving..." : "Save"}
-                </button>
-                <button className="editor-nav-btn" onClick={cancelEditing} style={{ padding: "6px 10px", borderRadius: "var(--radius-sm)", fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", cursor: "pointer" }}>
-                  Cancel
-                </button>
-              </>
-            ) : null}
-            <div style={{ position: "relative" }} ref={moreRef}>
-              <button style={{ padding: "6px 10px", borderRadius: "var(--radius-sm)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center" }} onClick={() => setMoreOpen(!moreOpen)}>
-                <MoreHorizontal size={18} strokeWidth={1.5} />
-              </button>
-              {moreOpen && (
-                <div className="dropdown-menu" style={{ right: 0, minWidth: 200 }}>
-                  {(memory.type === "text" || memory.type === "checklist") && (
-                    <>
-                      <button className="dropdown-item" onClick={exportAsPDF}>
-                        <FileText size={16} strokeWidth={1.5} /> Export as PDF
-                      </button>
-                      <button className="dropdown-item" onClick={exportAsDocument}>
-                        <Download size={16} strokeWidth={1.5} /> Export as Document
-                      </button>
-                      <button className="dropdown-item" onClick={copyAsText}>
-                        <Copy size={16} strokeWidth={1.5} /> Copy as Text
-                      </button>
-                    </>
-                  )}
-                  {memory.type === "image" && (
-                    <button className="dropdown-item" onClick={downloadMedia}>
-                      <ImageIcon size={16} strokeWidth={1.5} /> Download Image
-                    </button>
-                  )}
-                  {memory.type === "voice" && (
-                    <button className="dropdown-item" onClick={downloadMedia}>
-                      <Mic size={16} strokeWidth={1.5} /> Download Audio
-                    </button>
-                  )}
-                  {memory.type === "video" && (
-                    <button className="dropdown-item" onClick={downloadMedia}>
-                      <VideoIcon size={16} strokeWidth={1.5} /> Download Video
-                    </button>
-                  )}
-                  <div className="dropdown-divider" />
-                  <button className="dropdown-item" onClick={async () => { setMoreOpen(false); try { await moveMemoryToVault(memory.id); dispatch({ type: "DELETE_MEMORY", payload: memory.id }); dispatch({ type: "UNLOCK_VAULT" }); navigate("/vault"); } catch (err) { alert("Failed to move memory to vault."); } }}><Lock size={16} strokeWidth={1.5} /> Move to Vault</button>
-                  <div className="dropdown-divider" />
-                  <button className="dropdown-item danger" onClick={() => { handleDelete(); setMoreOpen(false); }}>
-                    <Trash2 size={16} strokeWidth={1.5} /> Delete
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
+
+        <div className="editor-nav-center">
+          <span style={{ display: "flex" }}>{getMemoryTypeIcon(memory.type, 20)}</span>
+        </div>
+
+        <div className="editor-nav-right">
+          <div style={{ position: "relative" }} ref={moreRef}>
+            <button
+              className="editor-nav-btn"
+              onClick={() => setMoreOpen(!moreOpen)}
+              aria-label="More options"
+              aria-expanded={moreOpen}
+            >
+              <MoreHorizontal size={16} strokeWidth={1.5} />
+            </button>
+            {moreOpen && (
+              <div
+                className="dropdown-menu"
+                style={{ right: 0, top: "calc(100% + 4px)", minWidth: 200 }}
+              >
+                {(memory.type === "text" || memory.type === "checklist") && (
+                  <>
+                    <button className="dropdown-item" onClick={exportAsPDF}>
+                      <FileText size={16} strokeWidth={1.5} /> Export as PDF
+                    </button>
+                    <button className="dropdown-item" onClick={exportAsDocument}>
+                      <Download size={16} strokeWidth={1.5} /> Export as Document
+                    </button>
+                    <button className="dropdown-item" onClick={copyAsText}>
+                      <Copy size={16} strokeWidth={1.5} /> Copy as Text
+                    </button>
+                  </>
+                )}
+                {memory.type === "image" && (
+                  <button className="dropdown-item" onClick={downloadMedia}>
+                    <ImageIcon size={16} strokeWidth={1.5} /> Download Image
+                  </button>
+                )}
+                {memory.type === "voice" && (
+                  <button className="dropdown-item" onClick={downloadMedia}>
+                    <Mic size={16} strokeWidth={1.5} /> Download Audio
+                  </button>
+                )}
+                {memory.type === "video" && (
+                  <button className="dropdown-item" onClick={downloadMedia}>
+                    <VideoIcon size={16} strokeWidth={1.5} /> Download Video
+                  </button>
+                )}
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-item"
+                  onClick={async () => {
+                    setMoreOpen(false);
+                    try {
+                      await moveMemoryToVault(memory.id);
+                      dispatch({ type: "DELETE_MEMORY", payload: memory.id });
+                      dispatch({ type: "UNLOCK_VAULT" });
+                      navigate("/vault");
+                    } catch (err) {
+                      alert("Failed to move memory to vault.");
+                    }
+                  }}
+                >
+                  <Lock size={16} strokeWidth={1.5} /> Move to Vault
+                </button>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-item danger"
+                  onClick={() => {
+                    handleDelete();
+                    setMoreOpen(false);
+                  }}
+                >
+                  <Trash2 size={16} strokeWidth={1.5} /> Delete
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button
+            className="editor-nav-btn"
+            onClick={handlePin}
+            aria-label={memory.pinned ? "Unpin memory" : "Pin memory"}
+            title={memory.pinned ? "Unpin memory" : "Pin memory"}
+            style={{ color: memory.pinned ? "#EAB308" : undefined }}
+          >
+            <Pin size={16} strokeWidth={1.5} />
+          </button>
+
+          <button
+            className="editor-nav-btn save-btn"
+            onClick={isEditing ? saveEdits : () => { startEditing(); }}
+            disabled={saving}
+            aria-label="Save"
+          >
+            <Save size={16} strokeWidth={1.5} />
+            {saving ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </nav>
+
+      <div className="memory-editor-content memory-view-page">
 
         <div className="memory-view-meta">
           <span className="memory-view-type">{getMemoryTypeIcon(memory.type, 20)}</span>

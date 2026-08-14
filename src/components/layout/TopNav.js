@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
 import { getInitials } from "../../utils/helpers";
-import { Search, Users, Calendar, Layout, MoreHorizontal, Lock, Trash2, LogOut, MessageSquare, Brain } from "lucide-react";
+import { Search, Users, Calendar, Layout, MoreHorizontal, Lock, Trash2, LogOut, Brain } from "lucide-react";
 
 export default function TopNav() {
   const navigate = useNavigate();
@@ -111,13 +111,6 @@ export default function TopNav() {
               >
                 <Trash2 size={16} strokeWidth={1.5} />
                 Recently Deleted
-              </button>
-              <button
-                className="dropdown-item"
-                onClick={() => { navigate("/chat-history"); setMoreOpen(false); }}
-              >
-                <MessageSquare size={16} strokeWidth={1.5} />
-                Chat History
               </button>
               <div className="dropdown-divider" />
               <button
