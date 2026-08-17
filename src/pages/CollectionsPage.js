@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import TopNav from "../components/layout/TopNav";
-import FAB from "../components/layout/FAB";
 import MemoryCard from "../components/memory/MemoryCard";
 import { useApp } from "../context/AppContext";
 import { useAppBackNavigation } from "../utils/useAppBackNavigation";
@@ -116,7 +115,6 @@ export default function CollectionsPage() {
           </>
         )}
       </div>
-      <FAB />
     </div>
   );
 }

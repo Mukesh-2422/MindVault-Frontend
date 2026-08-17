@@ -211,13 +211,13 @@ function InlineVoicePlayer({ memory, onNavigate }) {
         </div>
       </div>
 
-      {/* Transcription Text */}
-      {memory.content && (
-        <div className="inline-voice-transcription">
-          <span className="transcription-label">Transcription:</span>
-          <span className="transcription-text">{memory.content}</span>
-        </div>
-      )}
+      {/* Transcription / Memory Content Text */}
+      <div className="inline-voice-transcription">
+        <span className="transcription-label">{memory.content ? "Transcription:" : "Memory Note:"}</span>
+        <span className="transcription-text">
+          {memory.content || memory.title || "Voice recording"}
+        </span>
+      </div>
 
       {/* Secondary Bottom Right Detail Link */}
       <div className="inline-memory-card-footer">
@@ -541,70 +541,13 @@ export default function HomePage() {
     e.target.value = "";
   };
 
-  // Voice Input Setup
-  useEffect(() => {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = "en-US";
-
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
-        setListening(false);
-      };
-
-      recognition.onerror = (event) => {
-        console.error("Speech recognition error:", event.error);
-        setListening(false);
-      };
-
-      recognition.onend = () => {
-        setListening(false);
-      };
-
-      recognitionRef.current = recognition;
-    }
-  }, []);
-
-  const toggleListening = () => {
-    if (!recognitionRef.current) {
-      alert("Speech recognition is not supported in this browser.");
-      return;
-    }
-
-    if (listening) {
-      recognitionRef.current.stop();
-      setListening(false);
-    } else {
-      try {
-        recognitionRef.current.start();
-        setListening(true);
-      } catch (err) {
-        console.error("Failed to start speech recognition:", err);
-      }
-    }
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  const handleSend = async () => {
-    const msgText = input.trim();
-    if (!msgText && !attachedFile) return;
+  const submitMessage = useCallback(async (msgText, currentAttachment = null) => {
+    const text = (msgText || "").trim();
+    if (!text && !currentAttachment) return;
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
 
-    const currentAttachment = attachedFile;
-    const promptText = msgText || (currentAttachment ? `Search memories matching attached ${currentAttachment.type}: ${currentAttachment.name}` : "");
+    const promptText = text || (currentAttachment ? `Search memories matching attached ${currentAttachment.type}: ${currentAttachment.name}` : "");
 
     setInput("");
     setAttachedFile(null);
@@ -647,6 +590,211 @@ export default function HomePage() {
       setIsTyping(false);
       isSubmittingRef.current = false;
     }
+  }, [dispatch, processChat, selectedMemory, state.chatMessages]);
+
+  const streamRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingTimerRef = useRef(null);
+  const autoSubmitTimerRef = useRef(null);
+  const voiceTranscriptRef = useRef("");
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+
+  const formatRecordingTime = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s < 10 ? "0" : ""}${s}`;
+  };
+
+  // Cleanup speech recognition and media streams on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch {}
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
+
+  const startVoiceSearch = async () => {
+    try {
+      setChatError(null);
+      setVoiceTranscript("");
+      voiceTranscriptRef.current = "";
+      setRecordingTime(0);
+
+      // 1. Request microphone stream (will trigger browser popup if permission not granted yet)
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      // 2. Setup MediaRecorder for guaranteed audio capture across all browsers (Chrome, Brave, Edge, Firefox)
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.start(100);
+      setIsVoiceRecording(true);
+      setListening(true);
+
+      // Start duration timer
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
+
+      // 3. Setup Web Speech Recognition for live text transcription
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      if (SpeechRecognition) {
+        try {
+          if (recognitionRef.current) {
+            try { recognitionRef.current.abort(); } catch {}
+          }
+
+          const recognition = new SpeechRecognition();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = "en-US";
+
+          recognition.onresult = (event) => {
+            let fullText = "";
+            for (let i = 0; i < event.results.length; ++i) {
+              fullText += event.results[i][0].transcript;
+            }
+            const cleanText = fullText.trim();
+            if (cleanText) {
+              voiceTranscriptRef.current = cleanText;
+              setVoiceTranscript(cleanText);
+
+              // Auto-submit after 1.8s of speech completion
+              if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
+              autoSubmitTimerRef.current = setTimeout(() => {
+                finishVoiceSearch();
+              }, 1800);
+            }
+          };
+
+          recognition.onerror = (event) => {
+            console.warn("Speech recognition warning:", event.error);
+          };
+
+          recognitionRef.current = recognition;
+          recognition.start();
+        } catch (recErr) {
+          console.warn("Speech recognition start warning:", recErr);
+        }
+      }
+    } catch (err) {
+      console.error("Microphone access error:", err);
+      setIsVoiceRecording(false);
+      setListening(false);
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        setChatError("Microphone permission was denied. Please allow microphone access in your browser address bar.");
+      } else {
+        setChatError("Could not access microphone. Please check your audio input device.");
+      }
+    }
+  };
+
+  const finishVoiceSearch = () => {
+    if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch {}
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      try { mediaRecorderRef.current.stop(); } catch {}
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    setIsVoiceRecording(false);
+    setListening(false);
+
+    const query = (voiceTranscriptRef.current || voiceTranscript || "").trim();
+    if (query) {
+      voiceTranscriptRef.current = "";
+      setVoiceTranscript("");
+      submitMessage(query, attachedFile);
+    } else {
+      // If voice transcript was empty (e.g. Brave blocking Google speech API or quiet),
+      // attach the voice recording as an audio search attachment!
+      setTimeout(() => {
+        if (audioChunksRef.current.length > 0) {
+          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          const previewUrl = URL.createObjectURL(audioBlob);
+          setAttachedFile({
+            file: audioBlob,
+            name: `voice_memo_${Date.now()}.webm`,
+            size: audioBlob.size,
+            type: "voice",
+            previewUrl,
+          });
+          setInput("");
+        }
+      }, 150);
+    }
+  };
+
+  const cancelVoiceSearch = () => {
+    if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch {}
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      try { mediaRecorderRef.current.stop(); } catch {}
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    setIsVoiceRecording(false);
+    setListening(false);
+    voiceTranscriptRef.current = "";
+    setVoiceTranscript("");
+    setRecordingTime(0);
+  };
+
+  const toggleListening = () => {
+    if (isVoiceRecording || listening) {
+      finishVoiceSearch();
+    } else {
+      startVoiceSearch();
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const handleSend = () => {
+    submitMessage(input, attachedFile);
   };
 
   const handleSelectMemory = async (memoryId) => {
@@ -1061,77 +1209,120 @@ export default function HomePage() {
             </div>
           )}
 
-          <div className={`chat-input-box capsule-input-bar ${isEmptyState ? "empty-onboarding-input" : ""}`}>
-            <div className="chat-add-btn-wrapper" ref={attachMenuRef}>
-              <button
-                type="button"
-                className="chat-add-btn"
-                onClick={() => setAttachMenuOpen((prev) => !prev)}
-                title="Attach file or media to search"
-                aria-label="Attach file or media to search"
-              >
-                <Plus size={18} strokeWidth={2.5} style={{ transform: attachMenuOpen ? "rotate(45deg)" : "none", transition: "transform 0.2s" }} />
-              </button>
-
-              {/* Attachment Options Popover */}
-              {attachMenuOpen && (
-                <div className="chat-attachment-popover">
+          <div className={`chat-input-box capsule-input-bar ${isEmptyState ? "empty-onboarding-input" : ""} ${isVoiceRecording ? "recording-active" : ""}`}>
+            {isVoiceRecording ? (
+              <div className="chat-voice-active-bar">
+                <div className="voice-active-indicator">
+                  <span className="voice-active-pulse-dot" />
+                  <span className="voice-active-timer">{formatRecordingTime(recordingTime)}</span>
+                </div>
+                <div className="voice-active-wave">
+                  <span className="voice-wave-bar bar-1" />
+                  <span className="voice-wave-bar bar-2" />
+                  <span className="voice-wave-bar bar-3" />
+                  <span className="voice-wave-bar bar-4" />
+                  <span className="voice-wave-bar bar-5" />
+                  <span className="voice-wave-bar bar-6" />
+                  <span className="voice-wave-bar bar-7" />
+                </div>
+                <div className="voice-active-text">
+                  {voiceTranscript ? `"${voiceTranscript}"` : "Listening... Speak your question (e.g. 'mind')..."}
+                </div>
+                <div className="voice-active-actions">
                   <button
                     type="button"
-                    className="attachment-popover-item"
-                    onClick={() => triggerFileSelect("image/*")}
+                    className="voice-action-btn cancel"
+                    onClick={cancelVoiceSearch}
+                    title="Cancel voice search"
+                    aria-label="Cancel voice search"
                   >
-                    <span className="attachment-popover-icon"><ImageIcon size={16} /></span>
-                    <span className="attachment-popover-text">Upload Image</span>
+                    <X size={16} />
                   </button>
                   <button
                     type="button"
-                    className="attachment-popover-item"
-                    onClick={() => triggerFileSelect("audio/*")}
+                    className="voice-action-btn submit"
+                    onClick={finishVoiceSearch}
+                    title="Search memory with this voice query"
+                    aria-label="Search memory with this voice query"
                   >
-                    <span className="attachment-popover-icon"><Mic size={16} /></span>
-                    <span className="attachment-popover-text">Upload Audio</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="attachment-popover-item"
-                    onClick={() => triggerFileSelect(".pdf,.doc,.docx,.txt,.md,application/pdf,text/*")}
-                  >
-                    <span className="attachment-popover-icon"><FileText size={16} /></span>
-                    <span className="attachment-popover-text">Upload Document/File</span>
+                    <Send size={15} />
                   </button>
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <>
+                <div className="chat-add-btn-wrapper" ref={attachMenuRef}>
+                  <button
+                    type="button"
+                    className="chat-add-btn"
+                    onClick={() => setAttachMenuOpen((prev) => !prev)}
+                    title="Attach file or media to search"
+                    aria-label="Attach file or media to search"
+                  >
+                    <Plus size={18} strokeWidth={2.5} style={{ transform: attachMenuOpen ? "rotate(45deg)" : "none", transition: "transform 0.2s" }} />
+                  </button>
 
-            <textarea
-              ref={inputRef}
-              className="chat-input"
-              placeholder={attachedFile ? `Ask about "${attachedFile.name}"...` : "Type or speak your memory..."}
-              rows={1}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-            />
-            <div className="chat-input-actions-right">
-              <button
-                type="button"
-                className={`chat-mic-btn ${listening ? "recording" : ""}`}
-                title={listening ? "Stop listening" : "Start voice input"}
-                onClick={toggleListening}
-              >
-                <Mic size={18} strokeWidth={1.75} />
-              </button>
-              <button
-                type="button"
-                className="chat-send-btn"
-                onClick={handleSend}
-                disabled={(!input.trim() && !attachedFile) || isTyping}
-                title="Send"
-              >
-                <Send size={16} strokeWidth={2} />
-              </button>
-            </div>
+                  {/* Attachment Options Popover */}
+                  {attachMenuOpen && (
+                    <div className="chat-attachment-popover">
+                      <button
+                        type="button"
+                        className="attachment-popover-item"
+                        onClick={() => triggerFileSelect("image/*")}
+                      >
+                        <span className="attachment-popover-icon"><ImageIcon size={16} /></span>
+                        <span className="attachment-popover-text">Upload Image</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="attachment-popover-item"
+                        onClick={() => triggerFileSelect("audio/*")}
+                      >
+                        <span className="attachment-popover-icon"><Mic size={16} /></span>
+                        <span className="attachment-popover-text">Upload Audio</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="attachment-popover-item"
+                        onClick={() => triggerFileSelect(".pdf,.doc,.docx,.txt,.md,application/pdf,text/*")}
+                      >
+                        <span className="attachment-popover-icon"><FileText size={16} /></span>
+                        <span className="attachment-popover-text">Upload Document/File</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <textarea
+                  ref={inputRef}
+                  className="chat-input"
+                  placeholder={attachedFile ? `Ask about "${attachedFile.name}"...` : "Type or speak your memory..."}
+                  rows={1}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                />
+                <div className="chat-input-actions-right">
+                  <button
+                    type="button"
+                    className="chat-mic-btn"
+                    title="Search or ask memory using voice"
+                    onClick={startVoiceSearch}
+                  >
+                    <Mic size={18} strokeWidth={1.75} />
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-send-btn"
+                    onClick={handleSend}
+                    disabled={(!input.trim() && !attachedFile) || isTyping}
+                    title="Send"
+                  >
+                    <Send size={16} strokeWidth={2} />
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

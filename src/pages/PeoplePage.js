@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import TopNav from "../components/layout/TopNav";
-import FAB from "../components/layout/FAB";
 import PersonModal from "../components/people/PersonModal";
 import { useApp } from "../context/AppContext";
 import { getInitials } from "../utils/helpers";
@@ -321,8 +320,6 @@ export default function PeoplePage() {
         onClose={() => setModalOpen(false)}
         person={editingPerson}
       />
-
-      <FAB />
     </div>
   );
 }
